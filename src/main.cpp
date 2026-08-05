@@ -611,16 +611,14 @@ void doScan()
       break; 
     case ScanResult::matchFound:
       notifyClients( String("Match Found: ") + match.matchId + " - " + match.matchName  + " with confidence of " + match.matchConfidence );
-      if (match.scanResult != lastMatch.scanResult) {
-        if (checkPairingValid()) {
-          mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
-          mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), String(match.matchId).c_str());
-          mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), match.matchName.c_str());
-          mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), String(match.matchConfidence).c_str());
-          Serial.println("MQTT message sent: Open the door!");
-        } else {
-          notifyClients("Security issue! Match was not sent by MQTT because of invalid sensor pairing! This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page.");
-        }
+      if (checkPairingValid()) {
+        mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
+        mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), String(match.matchId).c_str());
+        mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), match.matchName.c_str());
+        mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), String(match.matchConfidence).c_str());
+        Serial.println("MQTT message sent: Open the door!");
+      } else {
+        notifyClients("Security issue! Match was not sent by MQTT because of invalid sensor pairing! This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page.");
       }
       delay(3000); // wait some time before next scan to let the LED blink
       break;
