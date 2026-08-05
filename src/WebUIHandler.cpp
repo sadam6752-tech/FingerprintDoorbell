@@ -1,0 +1,377 @@
+#include "WebUIHandler.h"
+#include <ESPAsyncWebServer.h>
+#include <SPIFFS.h>
+#include <ElegantOTA.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include "mbedtls/base64.h"
+#include "FingerprintManager.h"
+#include "SettingsManager.h"
+#include "WiFiManager.h"
+
+// Replaces placeholder in HTML pages
+String processor(const String& var){
+  if(var == "LOGMESSAGES"){
+    return getLogMessagesAsHtml();
+  } else if (var == "FINGERLIST") {
+    return fingerManager.getFingerListAsHtmlOptionList();
+  } else if (var == "HOSTNAME") {
+    return settingsManager.getWifiSettings().hostname;
+  } else if (var == "VERSIONINFO") {
+    return VersionInfo;
+  } else if (var == "WIFI_SSID") {
+    return settingsManager.getWifiSettings().ssid;
+  } else if (var == "WIFI_PASSWORD") {
+    if (settingsManager.getWifiSettings().password.isEmpty())
+      return "";
+    else
+      return "********";
+  } else if (var == "MQTT_SERVER") {
+    return settingsManager.getAppSettings().mqttServer;
+  } else if (var == "MQTT_USERNAME") {
+    return settingsManager.getAppSettings().mqttUsername;
+  } else if (var == "MQTT_PASSWORD") {
+    return settingsManager.getAppSettings().mqttPassword;
+  } else if (var == "MQTT_ROOTTOPIC") {
+    return settingsManager.getAppSettings().mqttRootTopic;
+  } else if (var == "MQTT_PORT") {
+    return String(settingsManager.getAppSettings().mqttPort);
+  } else if (var == "NTP_SERVER") {
+    return settingsManager.getAppSettings().ntpServer;
+  } else if (var == "ADMIN_USER") {
+    return settingsManager.getAppSettings().adminUser;
+  } else if (var == "ADMIN_PASSWORD") {
+    if (settingsManager.getAppSettings().adminPassword.isEmpty())
+      return "";
+    else
+      return "********";
+  }
+
+  return String();
+}
+
+
+void startWebserver(){
+  
+  // Initialize SPIFFS
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return;
+  }
+
+  // Init time by NTP Client
+  const long gmtOffset_sec = 0;
+  const int daylightOffset_sec = 0;
+  configTime(gmtOffset_sec, daylightOffset_sec, settingsManager.getAppSettings().ntpServer.c_str());
+  
+  // webserver for normal operating or wifi config?
+  if (currentMode == Mode::wificonfig)
+  {
+    // =================
+    // WiFi config mode
+    // =================
+
+    webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(SPIFFS, "/wificonfig.html", String(), false, processor);
+    });
+
+    webServer.on("/save", HTTP_GET, [](AsyncWebServerRequest *request){
+      if(request->hasArg("hostname"))
+      {
+        Serial.println("Save wifi config");
+        WifiSettings settings = settingsManager.getWifiSettings();
+        settings.hostname = request->arg("hostname");
+        settings.ssid = request->arg("ssid");
+        if (request->arg("password").equals("********"))
+          settings.password = settingsManager.getWifiSettings().password;
+        else
+          settings.password = request->arg("password");
+        settingsManager.saveWifiSettings(settings);
+        shouldReboot = true;
+      }
+      request->redirect("/");
+    });
+
+
+    webServer.onNotFound([](AsyncWebServerRequest *request){
+      AsyncResponseStream *response = request->beginResponseStream("text/html");
+      response->printf("<!DOCTYPE html><html><head><title>FingerprintDoorbell</title><meta http-equiv=\"refresh\" content=\"0; url=http://%s\" /></head><body>", WiFi.softAPIP().toString().c_str());
+      response->printf("<p>Please configure your WiFi settings <a href='http://%s'>here</a> to connect FingerprintDoorbell to your home network.</p>", WiFi.softAPIP().toString().c_str());
+      response->print("</body></html>");
+      request->send(response);
+    });
+
+  }
+  else
+  {
+    // =======================
+    // normal operating mode
+    // =======================
+    events.onConnect([](AsyncEventSourceClient *client){
+      if(client->lastId()){
+        Serial.printf("Client reconnected! Last message ID it got was: %u\n", client->lastId());
+      }
+      client->send(getLogMessagesAsHtml().c_str(),"message",millis(),1000);
+    });
+    webServer.addHandler(&events);
+
+    
+    // Route for root / web page
+    webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      request->send(SPIFFS, "/index.html", String(), false, processor);
+    });
+
+    webServer.on("/enroll", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("startEnrollment"))
+      {
+        enrollId = request->arg("newFingerprintId");
+        enrollName = request->arg("newFingerprintName");
+        currentMode = Mode::enroll;
+      }
+      request->redirect("/");
+    });
+
+    webServer.on("/editFingerprints", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("selectedFingerprint"))
+      {
+        if(request->hasArg("btnDelete"))
+        {
+          int id = request->arg("selectedFingerprint").toInt();
+          waitForMaintenanceMode();
+          fingerManager.deleteFinger(id);
+          currentMode = Mode::scan;
+        }
+        else if (request->hasArg("btnRename"))
+        {
+          int id = request->arg("selectedFingerprint").toInt();
+          String newName = request->arg("renameNewName");
+          fingerManager.renameFinger(id, newName);
+        }
+      }
+      request->redirect("/");  
+    });
+
+    webServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("btnSaveSettings"))
+      {
+        Serial.println("Save settings");
+        AppSettings settings = settingsManager.getAppSettings();
+        settings.mqttServer = request->arg("mqtt_server");
+        settings.mqttUsername = request->arg("mqtt_username");
+        settings.mqttPassword = urlDecode(request->arg("mqtt_password"));
+        settings.mqttPort = request->arg("mqtt_port").toInt();
+        if (settings.mqttPort <= 0 || settings.mqttPort > 65535) settings.mqttPort = 1883;
+        settings.mqttRootTopic = request->arg("mqtt_rootTopic");
+        settings.ntpServer = request->arg("ntpServer");
+        // Admin credentials
+        String newAdminUser = request->arg("admin_user");
+        String newAdminPass = request->arg("admin_password");
+        if (!newAdminUser.isEmpty()) settings.adminUser = newAdminUser;
+        if (!newAdminPass.isEmpty() && newAdminPass != "********") settings.adminPassword = newAdminPass;
+        settingsManager.saveAppSettings(settings);
+        request->redirect("/");  
+        shouldReboot = true;
+      } else {
+        request->send(SPIFFS, "/settings.html", String(), false, processor);
+      }
+    });
+
+
+    webServer.on("/pairing", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("btnDoPairing"))
+      {
+        Serial.println("Do (re)pairing");
+        doPairing();
+        request->redirect("/");  
+      } else {
+        request->send(SPIFFS, "/settings.html", String(), false, processor);
+      }
+    });
+
+
+
+    webServer.on("/factoryReset", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("btnFactoryReset"))
+      {
+        notifyClients("Factory reset initiated...");
+        
+        if (!fingerManager.deleteAll())
+          notifyClients("Finger database could not be deleted.");
+        
+        if (!settingsManager.deleteAppSettings())
+          notifyClients("App settings could not be deleted.");
+
+        if (!settingsManager.deleteWifiSettings())
+          notifyClients("Wifi settings could not be deleted.");
+        
+        request->redirect("/");  
+        shouldReboot = true;
+      } else {
+        request->send(SPIFFS, "/settings.html", String(), false, processor);
+      }
+    });
+
+
+    webServer.on("/deleteAllFingerprints", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if(request->hasArg("btnDeleteAllFingerprints"))
+      {
+        notifyClients("Deleting all fingerprints...");
+        
+        if (!fingerManager.deleteAll())
+          notifyClients("Finger database could not be deleted.");
+        
+        request->redirect("/");  
+        
+      } else {
+        request->send(SPIFFS, "/settings.html", String(), false, processor);
+      }
+    });
+
+
+    // ===== Backup: download fingerprints as JSON =====
+    webServer.on("/backup", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      notifyClients("Starting fingerprint backup...");
+      waitForMaintenanceMode();
+      String json = fingerManager.exportFingerprintsToJson();
+      currentMode = Mode::scan;
+      notifyClients("Backup completed.");
+      AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+      response->addHeader("Content-Disposition", "attachment; filename=\"fingerprints-backup.json\"");
+      request->send(response);
+    });
+
+    // ===== Restore: upload fingerprints JSON =====
+    webServer.on("/restore", HTTP_POST, 
+      // onRequest handler (called after body is received)
+      [](AsyncWebServerRequest *request){
+        request->redirect("/");
+      },
+      // onUpload handler (not used)
+      NULL,
+      // onBody handler (receives POST body)
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+        if (!authenticateRequest(request)) return;
+        
+        // Accumulate body data
+        static String bodyBuffer = "";
+        if (index == 0) {
+          bodyBuffer = "";
+          bodyBuffer.reserve(total);
+        }
+        for (size_t i = 0; i < len; i++) {
+          bodyBuffer += (char)data[i];
+        }
+        
+        // When complete, parse and import
+        if (index + len == total) {
+          notifyClients("Starting fingerprint restore...");
+          waitForMaintenanceMode();
+          
+          int imported = 0;
+          int failed = 0;
+          
+          // Simple JSON parser for our known format
+          // Format: [{"id":1,"name":"Alex","size":512,"template":"base64..."},...]
+          int searchPos = 0;
+          while (true) {
+            int objStart = bodyBuffer.indexOf('{', searchPos);
+            if (objStart < 0) break;
+            int objEnd = bodyBuffer.indexOf('}', objStart);
+            if (objEnd < 0) break;
+            
+            String obj = bodyBuffer.substring(objStart, objEnd + 1);
+            searchPos = objEnd + 1;
+            
+            // Extract id
+            int idIdx = obj.indexOf("\"id\":");
+            if (idIdx < 0) continue;
+            int id = obj.substring(idIdx + 5).toInt();
+            
+            // Extract name
+            int nameIdx = obj.indexOf("\"name\":\"");
+            if (nameIdx < 0) continue;
+            int nameStart = nameIdx + 8;
+            int nameEnd = obj.indexOf("\"", nameStart);
+            String name = obj.substring(nameStart, nameEnd);
+            
+            // Extract size
+            int sizeIdx = obj.indexOf("\"size\":");
+            int templateSize = 0;
+            if (sizeIdx >= 0) {
+              templateSize = obj.substring(sizeIdx + 7).toInt();
+            }
+            
+            // Extract template (base64)
+            int tplIdx = obj.indexOf("\"template\":\"");
+            if (tplIdx < 0) continue;
+            int tplStart = tplIdx + 12;
+            int tplEnd = obj.indexOf("\"", tplStart);
+            String b64Template = obj.substring(tplStart, tplEnd);
+            
+            // Decode base64
+            size_t decodedLen = 0;
+            mbedtls_base64_decode(NULL, 0, &decodedLen, (const unsigned char*)b64Template.c_str(), b64Template.length());
+            uint8_t* templateData = (uint8_t*)malloc(decodedLen);
+            if (!templateData) {
+              failed++;
+              continue;
+            }
+            size_t actualLen = 0;
+            int ret = mbedtls_base64_decode(templateData, decodedLen, &actualLen, (const unsigned char*)b64Template.c_str(), b64Template.length());
+            if (ret != 0) {
+              free(templateData);
+              failed++;
+              continue;
+            }
+            if (templateSize == 0) templateSize = actualLen;
+            
+            // Import
+            if (fingerManager.importFingerprintFromTemplate(id, name, templateData, templateSize)) {
+              imported++;
+            } else {
+              failed++;
+            }
+            free(templateData);
+          }
+          
+          currentMode = Mode::scan;
+          bodyBuffer = "";
+          notifyClients(String("Restore completed: ") + imported + " imported, " + failed + " failed.");
+          updateClientsFingerlist(fingerManager.getFingerListAsHtmlOptionList());
+        }
+      }
+    );
+
+
+    webServer.onNotFound([](AsyncWebServerRequest *request){
+      request->send(404);
+    });
+
+    
+  } // end normal operating mode
+
+
+  // common url callbacks
+  webServer.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!authenticateRequest(request)) return;
+    request->redirect("/");
+    shouldReboot = true;
+  });
+
+
+  // Enable Over-the-air updates at http://<IPAddress>/update
+  ElegantOTA.begin(&webServer, settingsManager.getAppSettings().adminUser.c_str(), settingsManager.getAppSettings().adminPassword.c_str());
+  
+  // Start server
+  webServer.begin();
+
+  notifyClients("System booted successfully!");
+}
