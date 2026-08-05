@@ -366,10 +366,6 @@ void startWebserver(){
     shouldReboot = true;
   });
 
-  webServer.on("/bootstrap.min.css", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(SPIFFS, "/bootstrap.min.css", "text/css");
-  });
-
 
   // Enable Over-the-air updates at http://<IPAddress>/update
   ElegantOTA.begin(&webServer, settingsManager.getAppSettings().adminUser.c_str(), settingsManager.getAppSettings().adminPassword.c_str());

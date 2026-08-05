@@ -1,235 +1,138 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- created with https://bootstrapformbuilder.com/ -->
-  <title>FingerprintDoorbell</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" charset="utf-8">
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-  <style>
-	.alert-custom{
-		background-color:#cecece;
-		color:rgb(0, 0, 0);
-	}
-	.form-horizontal{
-		margin-left: 15px;
-		margin-right: 15px;
-	}
-  </style>
+<title>FingerprintDoorbell - Settings</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" charset="utf-8">
+<link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#e0e0e0;line-height:1.5}
+a{color:#FF8C00;text-decoration:none}
+.nav{position:sticky;top:0;z-index:10;background:#16213e;display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #2a2a4a;gap:12px}
+.nav .brand{font-weight:700;font-size:1.1em;flex:1}
+.nav a{font-size:.9em;padding:6px 12px;border-radius:6px;color:#ccc}
+.nav a.active{background:#FF8C00;color:#fff}
+.wrap{max-width:540px;margin:0 auto;padding:16px}
+.log{background:#0d1117;border-left:3px solid #FF8C00;padding:12px;margin-bottom:16px;font-family:'Courier New',monospace;font-size:.8em;border-radius:6px;min-height:50px;line-height:1.6}
+.card{background:#16213e;border:1px solid #2a2a4a;border-radius:10px;padding:20px;margin-bottom:16px}
+.card h2{font-size:1.05em;margin-bottom:14px;color:#FF8C00;padding-bottom:8px;border-bottom:1px solid #2a2a4a}
+label{display:block;font-size:.85em;margin-bottom:5px;color:#aaa;margin-top:12px}
+label:first-of-type{margin-top:0}
+input[type=text],input[type=password],input[type=number],input[type=file]{display:block;width:100%%;padding:10px 12px;border:1px solid #2a2a4a;border-radius:6px;background:#0d1117;color:#e0e0e0;font-size:.9em;margin-bottom:4px}
+input:focus{outline:none;border-color:#FF8C00;box-shadow:0 0 0 2px rgba(255,140,0,0.2)}
+small{display:block;color:#777;font-size:.78em;margin-bottom:8px}
+hr{border:none;border-top:1px solid #2a2a4a;margin:16px 0}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btn{display:inline-block;padding:9px 18px;border:none;border-radius:6px;font-size:.85em;font-weight:500;cursor:pointer;color:#fff;text-decoration:none}
+.btn-green{background:#2ea043}.btn-green:hover{background:#3cba54}
+.btn-red{background:#c0392b}.btn-red:hover{background:#e74c3c}
+.btn-blue{background:#2980b9}.btn-blue:hover{background:#3498db}
+.btn-orange{background:#e67e00}.btn-orange:hover{background:#FF8C00}
+.btn-gray{background:#444;color:#ddd}.btn-gray:hover{background:#555}
+.footer{text-align:center;font-size:.75em;color:#555;padding:24px 12px}
+</style>
 </head>
 <body>
-	<script>
-		if (!!window.EventSource) {
-			var source = new EventSource('/events');
+<script>
+if(!!window.EventSource){
+var source=new EventSource('/events');
+source.addEventListener('message',function(e){document.getElementById('logMessages').innerHTML=e.data;},false);
+}
+function restoreFingerprints(){
+var f=document.getElementById('restoreFile');
+if(!f.files.length){alert('Please select a backup JSON file first.');return;}
+if(!confirm('Restore fingerprints from backup? Existing IDs will be overwritten.')){return;}
+var reader=new FileReader();
+reader.onload=function(e){
+var xhr=new XMLHttpRequest();
+xhr.open('POST','/restore',true);
+xhr.setRequestHeader('Content-Type','application/json');
+xhr.onreadystatechange=function(){if(xhr.readyState===4){if(xhr.status===200){alert('Restore completed!');location.reload();}else{alert('Failed: '+xhr.status);}}};
+xhr.send(e.target.result);
+};
+reader.readAsText(f.files[0]);
+}
+</script>
 
-			source.addEventListener('open', function(e) {
-				console.log("Events Connected");
-			}, false);
+<nav class="nav">
+<span class="brand">%HOSTNAME%</span>
+<a href="/">Fingerprints</a>
+<a class="active" href="/settings">Settings</a>
+</nav>
 
-			source.addEventListener('error', function(e) {
-				if (e.target.readyState != EventSource.OPEN) {
-				console.log("Events Disconnected");
-				}
-			}, false);
+<div class="wrap">
+<div class="log" id="logMessages">%LOGMESSAGES%</div>
 
-			// event is fired when a new message from server was received
-			source.addEventListener('message', function(e) {
-				console.log("message", e.data);
-				document.getElementById('logMessages').innerHTML = event.data;
-			}, false);
+<form action="/settings">
+<div class="card">
+<h2>MQTT Settings</h2>
+<label for="mqtt_server">MQTT Server (Broker)</label>
+<input id="mqtt_server" name="mqtt_server" type="text" placeholder="192.168.1.x" value="%MQTT_SERVER%" required>
 
-		}
-    </script>
+<label for="mqtt_username">MQTT Username</label>
+<input id="mqtt_username" name="mqtt_username" type="text" placeholder="Username" value="%MQTT_USERNAME%">
+<small>Leave empty if no authentication required.</small>
 
-	<nav class="navbar navbar-inverse">
-		<div class="container-fluid">
-		  <div class="navbar-header">
-			<a class="navbar-brand" href="/">%HOSTNAME%</a>
-		  </div>
-		  <ul class="nav navbar-nav">
-			<li><a href="/">Fingerprints</a></li>
-			<li class="active"><a href="#">Settings</a></li>
-		  </ul>
-		</div>
-	</nav>
+<label for="mqtt_password">MQTT Password</label>
+<input id="mqtt_password" name="mqtt_password" type="password" placeholder="Password" value="%MQTT_PASSWORD%">
+<small>Leave empty if no authentication required.</small>
 
-	<div class="alert alert-custom" id="logMessages" role="alert">%LOGMESSAGES%</div>
+<label for="mqtt_port">MQTT Port</label>
+<input id="mqtt_port" name="mqtt_port" type="number" placeholder="1883" value="%MQTT_PORT%">
+<small>Default: 1883</small>
 
-	<form class="form-horizontal" action="/settings">
-	<fieldset>
+<label for="mqtt_rootTopic">MQTT Root Topic</label>
+<input id="mqtt_rootTopic" name="mqtt_rootTopic" type="text" value="%MQTT_ROOTTOPIC%" required>
+<small>Publishes: status, ring, matchId, matchName, matchConfidence, lastLogMessage<br>Subscribes: ignoreTouchRing, reboot</small>
 
-	<!-- Form Name -->
-	<legend>Settings</legend>
+<label for="ntpServer">NTP Server</label>
+<input id="ntpServer" name="ntpServer" type="text" placeholder="pool.ntp.org" value="%NTP_SERVER%">
+<small>Used for log timestamps.</small>
 
-	<!-- Text input-->
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="mqtt_server">MQTT Server (Broker)</label>  
-		<div class="col-md-4">
-		<input id="mqtt_server" name="mqtt_server" type="text" placeholder="Address of your MQTT Broker" class="form-control input-md" value="%MQTT_SERVER%" required>
-		</div>
-	</div>
+<div class="btns">
+<button name="btnSaveSettings" class="btn btn-green">Save and Restart</button>
+</div>
+</div>
+</form>
 
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="mqtt_username">MQTT Username</label>  
-		<div class="col-md-4">
-		<input id="mqtt_username" name="mqtt_username" type="text" placeholder="Username for connecting to your MQTT Broker" class="form-control input-md" value="%MQTT_USERNAME%">
-		<small class="text-muted">Leave empty if your broker is not requiring authentication.</small>		
-		</div>
-	</div>
+<form action="/settings">
+<div class="card">
+<h2>Web Admin Credentials</h2>
+<label for="admin_user">Admin Username</label>
+<input id="admin_user" name="admin_user" type="text" placeholder="admin" value="%ADMIN_USER%">
 
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="mqtt_password">MQTT Password</label>  
-		<div class="col-md-4">
-		<input id="mqtt_password" name="mqtt_password" type="password" placeholder="Password for connecting to your MQTT Broker" class="form-control input-md" value="%MQTT_PASSWORD%">
-		<small class="text-muted">Leave empty if your broker is not requiring authentication.</small>		
-		</div>
-	</div>
+<label for="admin_password">Admin Password</label>
+<input id="admin_password" name="admin_password" type="password" placeholder="Set a password" value="%ADMIN_PASSWORD%">
+<small>Required for WebUI access and OTA updates.</small>
 
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="mqtt_port">MQTT Port</label>  
-		<div class="col-md-4">
-		<input id="mqtt_port" name="mqtt_port" type="number" placeholder="1883" class="form-control input-md" value="%MQTT_PORT%">
-		<small class="text-muted">Default: 1883</small>		
-		</div>
-	</div>
+<div class="btns">
+<button name="btnSaveSettings" class="btn btn-green">Save and Restart</button>
+</div>
+</div>
+</form>
 
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="mqtt_rootTopic">MQTT Root Topic</label>  
-		<div class="col-md-4">
-		<input id="mqtt_rootTopic" name="mqtt_rootTopic" type="text" placeholder="Root topic where FingerprintDoorbell publishes its messages" class="form-control input-md" value="%MQTT_ROOTTOPIC%" required>
-		<small class="text-muted">Published Topics (=write)<br>
-			- "%MQTT_ROOTTOPIC%/status" (online/offline)<br>
-			- "%MQTT_ROOTTOPIC%/ring"<br>
-			- "%MQTT_ROOTTOPIC%/matchId"<br>
-			- "%MQTT_ROOTTOPIC%/matchName"<br>
-			- "%MQTT_ROOTTOPIC%/matchConfidence"<br>
-			- "%MQTT_ROOTTOPIC%/lastLogMessage"<br>
-			Subscribed Topics (=read)<br>
-			- "%MQTT_ROOTTOPIC%/ignoreTouchRing"<br>
-			- "%MQTT_ROOTTOPIC%/reboot"
-		</small>
-		</div>
-	</div>
+<form>
+<div class="card">
+<h2>Advanced Actions</h2>
+<div class="btns">
+<a href="/backup" class="btn btn-gray">💾 Backup</a>
+<button name="btnFirmwareUpdate" class="btn btn-blue" type="submit" formaction="update">Firmware Update</button>
+<button name="btnDoPairing" class="btn btn-orange" type="submit" formaction="pairing">Pair Sensor</button>
+</div>
+<div class="btns">
+<button name="btnDeleteAllFingerprints" class="btn btn-red" type="submit" formaction="deleteAllFingerprints" onclick="return confirm('Delete ALL fingerprints?')">Delete All FP</button>
+<button name="btnFactoryReset" class="btn btn-red" type="submit" formaction="factoryReset" onclick="return confirm('Factory reset? All data will be lost!')">Factory Reset</button>
+</div>
+<hr>
+<label>Restore Fingerprints from Backup</label>
+<input type="file" id="restoreFile" accept=".json">
+<div class="btns">
+<button type="button" class="btn btn-orange" onclick="restoreFingerprints()">🔄 Restore</button>
+</div>
+</div>
+</form>
+</div>
 
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="ntpServer">NTP Server</label>  
-		<div class="col-md-4">
-		<input id="ntpServer" name="ntpServer" type="text" placeholder="URL to NTP server" class="form-control input-md" value="%NTP_SERVER%">
-		<small class="text-muted">Used for timestamps in log panel. If you don't specify any, time will be always null.</small>		
-		</div>
-	</div>
-
-	<!-- Button -->
-	<div class="form-group">
-	  <label class="col-md-4 control-label" for="btnSaveSettings"></label>
-	  <div class="col-md-4">
-		<button id="btnSaveSettings" name="btnSaveSettings" class="btn btn-success">Save and Restart</button>
-	  </div>
-	</div>
-
-	</fieldset>
-	</form>
-
-	<form class="form-horizontal" action="/settings">
-	<fieldset>
-
-	<!-- Form Name -->
-	<legend>Web Admin Credentials</legend>
-
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="admin_user">Admin Username</label>  
-		<div class="col-md-4">
-		<input id="admin_user" name="admin_user" type="text" placeholder="admin" class="form-control input-md" value="%ADMIN_USER%">
-		</div>
-	</div>
-
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="admin_password">Admin Password</label>  
-		<div class="col-md-4">
-		<input id="admin_password" name="admin_password" type="password" placeholder="Set a password to protect WebUI" class="form-control input-md" value="%ADMIN_PASSWORD%">
-		<small class="text-muted">Leave empty on first setup, then set a secure password. Required for WebUI access and OTA updates.</small>
-		</div>
-	</div>
-
-	<!-- Button -->
-	<div class="form-group">
-	  <label class="col-md-4 control-label" for="btnSaveSettings"></label>
-	  <div class="col-md-4">
-		<button id="btnSaveSettings" name="btnSaveSettings" class="btn btn-success">Save and Restart</button>
-	  </div>
-	</div>
-
-	</fieldset>
-	</form>
-
-	<form class="form-horizontal">
-	<fieldset>
-	
-	<!-- Form Name -->
-	<legend>Advanced Actions</legend>
-
-	<div class="form-group">
-		<label class="col-md-4 control-label" for="btnFirmwareUpdate"></label>
-		<div class="col-md-4">
-			<a href="/backup" class="btn btn-default">&#x1F4BE; Backup Fingerprints</a>
-			<button id="btnFirmwareUpdate" name="btnFirmwareUpdate" class="btn btn-info" type="submit" formaction="update">Firmware-Update </button>
-			<button id="btnDoPairing" name="btnDoPairing" class="btn btn-warning" type="submit" formaction="pairing">Pairing a new sensor </button>
-			<button id="btnDeleteAllFingerprints" name="btnDeleteAllFingerprints" class="btn btn-danger" type="submit" formaction="deleteAllFingerprints" onclick="return confirm('This will delete all fingerprints. Are you sure you wanna do that?')">Delete all Fingerprints</button>
-			<button id="btnFactoryReset" name="btnFactoryReset" class="btn btn-danger" type="submit" formaction="factoryReset" onclick="return confirm('This will delete all fingerprints, your settings and your WiFi configuration. Are you sure you wanna do that?')">Factory-Reset</button>
-		</div>
-	  </div>
-
-	  <div class="form-group">
-		<label class="col-md-4 control-label">Restore Fingerprints</label>
-		<div class="col-md-4">
-			<input type="file" id="restoreFile" accept=".json" class="form-control">
-			<br>
-			<button type="button" class="btn btn-warning" onclick="restoreFingerprints()">&#x1F504; Restore from Backup</button>
-			<small class="text-muted"><br>Upload a previously downloaded backup JSON file to restore fingerprints to the sensor.</small>
-		</div>
-	  </div>
-
-	</fieldset>
-	</form>
-
-
-	<p></p>
-	<script>
-	function restoreFingerprints() {
-		var fileInput = document.getElementById('restoreFile');
-		if (!fileInput.files.length) {
-			alert('Please select a backup JSON file first.');
-			return;
-		}
-		if (!confirm('This will restore fingerprints from backup. Existing fingerprints with same IDs will be overwritten. Continue?')) {
-			return;
-		}
-		var file = fileInput.files[0];
-		var reader = new FileReader();
-		reader.onload = function(e) {
-			var xhr = new XMLHttpRequest();
-			xhr.open('POST', '/restore', true);
-			xhr.setRequestHeader('Content-Type', 'application/json');
-			xhr.onreadystatechange = function() {
-				if (xhr.readyState === 4) {
-					if (xhr.status === 200) {
-						alert('Restore completed! Check log for details.');
-						window.location.reload();
-					} else {
-						alert('Restore failed: ' + xhr.status);
-					}
-				}
-			};
-			xhr.send(e.target.result);
-		};
-		reader.readAsText(file);
-	}
-	</script>
-	<nav class="navbar navbar-default ">
-		<div class="container-fluid">
-		  <p class="navbar-text">FingerprintDoorbell, Version %VERSIONINFO%</p>
-		</div>
-	</nav>
-
+<div class="footer">FingerprintDoorbell v%VERSIONINFO%</div>
 </body>
 </html>
