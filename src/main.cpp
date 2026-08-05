@@ -6,6 +6,8 @@
 #include <time.h>
 #include <ESPAsyncWebServer.h>
 #include <PubSubClient.h>
+#include <esp_task_wdt.h>
+#include <Preferences.h>
 #include "FingerprintManager.h"
 #include "SettingsManager.h"
 #include "global.h"
@@ -13,9 +15,17 @@
 #include "MQTTManager.h"
 #include "WebUIHandler.h"
 
+// Watchdog timeout (seconds) — if loop() doesn't feed WDT within this time, ESP reboots
+#define WDT_TIMEOUT_SEC 30
+
+// Crash recovery: after this many consecutive crashes, enter safe mode
+#define MAX_CRASH_COUNT 3
+
 // ===== Global variable DEFINITIONS =====
-const char* VersionInfo = "0.6";
+const char* VersionInfo = "0.7";
 const int doorbellOutputPin = 19;
+bool safeMode = false; // true = only WiFi+WebUI, no scanning/MQTT
+unsigned long lastHeapCheck = 0;
 
 #ifdef CUSTOM_GPIOS
   const int customOutput1 = 18;
@@ -268,11 +278,47 @@ void reboot()
 
 // ===== setup() and loop() =====
 
+// Crash counter management (stored in NVS)
+int getCrashCount() {
+  Preferences prefs;
+  prefs.begin("stability", true);
+  int count = prefs.getInt("crashCount", 0);
+  prefs.end();
+  return count;
+}
+
+void incrementCrashCount() {
+  Preferences prefs;
+  prefs.begin("stability", false);
+  int count = prefs.getInt("crashCount", 0);
+  prefs.putInt("crashCount", count + 1);
+  prefs.end();
+}
+
+void resetCrashCount() {
+  Preferences prefs;
+  prefs.begin("stability", false);
+  prefs.putInt("crashCount", 0);
+  prefs.end();
+}
+
 void setup()
 {
   Serial.begin(115200);
   while (!Serial);
   delay(100);
+
+  // ===== Crash counter check =====
+  incrementCrashCount();  // will be reset after successful boot
+  int crashCount = getCrashCount();
+  if (crashCount >= MAX_CRASH_COUNT) {
+    safeMode = true;
+    Serial.println("*** SAFE MODE: Too many consecutive crashes (" + String(crashCount) + "). Only WiFi + WebUI active. ***");
+  }
+
+  // ===== Hardware Watchdog =====
+  esp_task_wdt_init(WDT_TIMEOUT_SEC, true); // true = panic (reboot) on timeout
+  esp_task_wdt_add(NULL); // add current task (loopTask) to WDT
 
   // initialize GPIOs
   pinMode(doorbellOutputPin, OUTPUT); 
@@ -286,16 +332,18 @@ void setup()
   settingsManager.loadWifiSettings();
   settingsManager.loadAppSettings();
 
-  fingerManager.connect();
-  
-  if (!checkPairingValid())
-    notifyClients("Security issue! Pairing with sensor is invalid. This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page. MQTT messages regarding matching fingerprints will not been sent until pairing is valid again.");
+  if (!safeMode) {
+    fingerManager.connect();
+    
+    if (!checkPairingValid())
+      notifyClients("Security issue! Pairing with sensor is invalid. This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page. MQTT messages regarding matching fingerprints will not been sent until pairing is valid again.");
+  }
 
-  if (fingerManager.isFingerOnSensor() || !settingsManager.isWifiConfigured())
+  if (safeMode || fingerManager.isFingerOnSensor() || !settingsManager.isWifiConfigured())
   {
     currentMode = Mode::wificonfig;
     Serial.println("Started WiFi-Config mode");
-    fingerManager.setLedRingWifiConfig();
+    if (!safeMode) fingerManager.setLedRingWifiConfig();
     initWiFiAccessPointForConfiguration();
     startWebserver();
 
@@ -332,18 +380,35 @@ void setup()
       shouldReboot = true;
     }
   }
+
+  // If we got here without crashing, boot was successful — reset crash counter
+  resetCrashCount();
+  Serial.println("Boot successful. Free heap: " + String(ESP.getFreeHeap()) + " bytes");
 }
 
 void loop()
 {
+  // Feed the watchdog — proves loop() is alive
+  esp_task_wdt_reset();
+
   if (shouldReboot) {
     reboot();
   }
   
+  // Heap monitoring (every 60s)
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastHeapCheck >= 60000ul) {
+    lastHeapCheck = currentMillis;
+    uint32_t freeHeap = ESP.getFreeHeap();
+    if (freeHeap < 20000) {
+      Serial.println("WARNING: Low heap memory: " + String(freeHeap) + " bytes");
+      notifyClients("Warning: Low memory (" + String(freeHeap / 1024) + " KB free)");
+    }
+  }
+
   // Reconnect handling
   if (currentMode != Mode::wificonfig)
   {
-    unsigned long currentMillis = millis();
     // reconnect WiFi if down for 30s
     if ((WiFi.status() != WL_CONNECTED) && (currentMillis - wifiReconnectPreviousMillis >= 30000ul)) {
       Serial.println("Reconnecting to WiFi...");
