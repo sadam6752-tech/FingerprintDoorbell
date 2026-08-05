@@ -275,6 +275,7 @@ bool initWifi() {
 }
 
 void initWiFiAccessPointForConfiguration() {
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // reduce power to prevent brownout on weak USB supply
   WiFi.softAPConfig(WifiConfigIp, WifiConfigIp, IPAddress(255, 255, 255, 0));
   WiFi.softAP(WifiConfigSsid, WifiConfigPassword);
 
