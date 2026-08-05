@@ -14,11 +14,14 @@ struct AppSettings {
     String mqttServer = "";
     String mqttUsername = "";
     String mqttPassword = "";
+    int    mqttPort = 1883;
     String mqttRootTopic = "fingerprintDoorbell";
     String ntpServer = "pool.ntp.org";
     String sensorPin = "00000000";
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;
+    String adminUser = "admin";
+    String adminPassword = "";  // empty = no auth (first boot)
 };
 
 class SettingsManager {       
@@ -45,6 +48,9 @@ class SettingsManager {
     bool deleteWifiSettings();
 
     String generateNewPairingCode();
+
+    bool isAuthConfigured();
+    bool checkAuth(const String& user, const String& pass);
 
 };
 

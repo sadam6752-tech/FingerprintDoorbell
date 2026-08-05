@@ -80,8 +80,16 @@
 	<div class="form-group">
 		<label class="col-md-4 control-label" for="mqtt_password">MQTT Password</label>  
 		<div class="col-md-4">
-		<input id="mqtt_password" name="mqtt_password" type="text" placeholder="Password for connecting to your MQTT Broker" class="form-control input-md" value="%MQTT_PASSWORD%">
+		<input id="mqtt_password" name="mqtt_password" type="password" placeholder="Password for connecting to your MQTT Broker" class="form-control input-md" value="%MQTT_PASSWORD%">
 		<small class="text-muted">Leave empty if your broker is not requiring authentication.</small>		
+		</div>
+	</div>
+
+	<div class="form-group">
+		<label class="col-md-4 control-label" for="mqtt_port">MQTT Port</label>  
+		<div class="col-md-4">
+		<input id="mqtt_port" name="mqtt_port" type="number" placeholder="1883" class="form-control input-md" value="%MQTT_PORT%">
+		<small class="text-muted">Default: 1883</small>		
 		</div>
 	</div>
 
@@ -90,13 +98,15 @@
 		<div class="col-md-4">
 		<input id="mqtt_rootTopic" name="mqtt_rootTopic" type="text" placeholder="Root topic where FingerprintDoorbell publishes its messages" class="form-control input-md" value="%MQTT_ROOTTOPIC%" required>
 		<small class="text-muted">Published Topics (=write)<br>
+			- "%MQTT_ROOTTOPIC%/status" (online/offline)<br>
 			- "%MQTT_ROOTTOPIC%/ring"<br>
 			- "%MQTT_ROOTTOPIC%/matchId"<br>
 			- "%MQTT_ROOTTOPIC%/matchName"<br>
 			- "%MQTT_ROOTTOPIC%/matchConfidence"<br>
 			- "%MQTT_ROOTTOPIC%/lastLogMessage"<br>
 			Subscribed Topics (=read)<br>
-			- "%MQTT_ROOTTOPIC%/ignoreTouchRing"
+			- "%MQTT_ROOTTOPIC%/ignoreTouchRing"<br>
+			- "%MQTT_ROOTTOPIC%/reboot"
 		</small>
 		</div>
 	</div>
@@ -120,6 +130,38 @@
 	</fieldset>
 	</form>
 
+	<form class="form-horizontal" action="/settings">
+	<fieldset>
+
+	<!-- Form Name -->
+	<legend>Web Admin Credentials</legend>
+
+	<div class="form-group">
+		<label class="col-md-4 control-label" for="admin_user">Admin Username</label>  
+		<div class="col-md-4">
+		<input id="admin_user" name="admin_user" type="text" placeholder="admin" class="form-control input-md" value="%ADMIN_USER%">
+		</div>
+	</div>
+
+	<div class="form-group">
+		<label class="col-md-4 control-label" for="admin_password">Admin Password</label>  
+		<div class="col-md-4">
+		<input id="admin_password" name="admin_password" type="password" placeholder="Set a password to protect WebUI" class="form-control input-md" value="%ADMIN_PASSWORD%">
+		<small class="text-muted">Leave empty on first setup, then set a secure password. Required for WebUI access and OTA updates.</small>
+		</div>
+	</div>
+
+	<!-- Button -->
+	<div class="form-group">
+	  <label class="col-md-4 control-label" for="btnSaveSettings"></label>
+	  <div class="col-md-4">
+		<button id="btnSaveSettings" name="btnSaveSettings" class="btn btn-success">Save and Restart</button>
+	  </div>
+	</div>
+
+	</fieldset>
+	</form>
+
 	<form class="form-horizontal">
 	<fieldset>
 	
@@ -129,10 +171,21 @@
 	<div class="form-group">
 		<label class="col-md-4 control-label" for="btnFirmwareUpdate"></label>
 		<div class="col-md-4">
+			<a href="/backup" class="btn btn-default">&#x1F4BE; Backup Fingerprints</a>
 			<button id="btnFirmwareUpdate" name="btnFirmwareUpdate" class="btn btn-info" type="submit" formaction="update">Firmware-Update </button>
 			<button id="btnDoPairing" name="btnDoPairing" class="btn btn-warning" type="submit" formaction="pairing">Pairing a new sensor </button>
 			<button id="btnDeleteAllFingerprints" name="btnDeleteAllFingerprints" class="btn btn-danger" type="submit" formaction="deleteAllFingerprints" onclick="return confirm('This will delete all fingerprints. Are you sure you wanna do that?')">Delete all Fingerprints</button>
 			<button id="btnFactoryReset" name="btnFactoryReset" class="btn btn-danger" type="submit" formaction="factoryReset" onclick="return confirm('This will delete all fingerprints, your settings and your WiFi configuration. Are you sure you wanna do that?')">Factory-Reset</button>
+		</div>
+	  </div>
+
+	  <div class="form-group">
+		<label class="col-md-4 control-label">Restore Fingerprints</label>
+		<div class="col-md-4">
+			<input type="file" id="restoreFile" accept=".json" class="form-control">
+			<br>
+			<button type="button" class="btn btn-warning" onclick="restoreFingerprints()">&#x1F504; Restore from Backup</button>
+			<small class="text-muted"><br>Upload a previously downloaded backup JSON file to restore fingerprints to the sensor.</small>
 		</div>
 	  </div>
 
@@ -141,6 +194,37 @@
 
 
 	<p></p>
+	<script>
+	function restoreFingerprints() {
+		var fileInput = document.getElementById('restoreFile');
+		if (!fileInput.files.length) {
+			alert('Please select a backup JSON file first.');
+			return;
+		}
+		if (!confirm('This will restore fingerprints from backup. Existing fingerprints with same IDs will be overwritten. Continue?')) {
+			return;
+		}
+		var file = fileInput.files[0];
+		var reader = new FileReader();
+		reader.onload = function(e) {
+			var xhr = new XMLHttpRequest();
+			xhr.open('POST', '/restore', true);
+			xhr.setRequestHeader('Content-Type', 'application/json');
+			xhr.onreadystatechange = function() {
+				if (xhr.readyState === 4) {
+					if (xhr.status === 200) {
+						alert('Restore completed! Check log for details.');
+						window.location.reload();
+					} else {
+						alert('Restore failed: ' + xhr.status);
+					}
+				}
+			};
+			xhr.send(e.target.result);
+		};
+		reader.readAsText(file);
+	}
+	</script>
 	<nav class="navbar navbar-default ">
 		<div class="container-fluid">
 		  <p class="navbar-text">FingerprintDoorbell, Version %VERSIONINFO%</p>

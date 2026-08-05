@@ -69,10 +69,11 @@ class FingerprintManager {
     
     bool deleteAll();
 
-    
-    // functions for sensor replacement
-    void exportSensorDB();
-    void importSensorDB();
+    // Backup & Restore
+    String exportFingerprintsToJson();
+    bool importFingerprintFromTemplate(int id, const String& name, const uint8_t* templateData, int templateSize);
+    int getTemplateCount();
+    String getFingerName(int id);
 
 };
 

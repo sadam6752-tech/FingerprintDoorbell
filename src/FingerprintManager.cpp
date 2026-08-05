@@ -2,6 +2,8 @@
 #include "global.h"
 
 #include <Adafruit_Fingerprint.h>
+#include <base64.h>
+#include "mbedtls/base64.h"
 
 bool FingerprintManager::connect() {
   
@@ -549,12 +551,126 @@ bool FingerprintManager::setPairingCode(String pairingCode) {
 }
 
 
-// ToDo: support sensor replacement by enable transferring of sensor DB to another sensor
-void FingerprintManager::exportSensorDB() {
+// Backup & Restore
 
+int FingerprintManager::getTemplateCount() {
+  finger.getTemplateCount();
+  return finger.templateCount;
 }
-    
-void FingerprintManager::importSensorDB() {
 
+String FingerprintManager::getFingerName(int id) {
+  if (id >= 1 && id <= 200)
+    return fingerList[id];
+  return "@empty";
+}
+
+String FingerprintManager::exportFingerprintsToJson() {
+  // Export all stored fingerprint templates as JSON array
+  // Format: [{"id":1,"name":"Alex","template":"base64..."},...]
+  String json = "[";
+  bool first = true;
+  
+  for (int id = 1; id <= 200; id++) {
+    if (fingerList[id] == "@empty")
+      continue;
+    
+    // Load template from sensor into buffer
+    uint8_t result = finger.loadModel(id);
+    if (result != FINGERPRINT_OK) {
+      Serial.println(String("Failed to load model #") + id + ", rc=" + result);
+      continue;
+    }
+    
+    // Transfer template from sensor buffer to MCU
+    result = finger.getModel();
+    if (result != FINGERPRINT_OK) {
+      Serial.println(String("Failed to get model #") + id + ", rc=" + result);
+      continue;
+    }
+    
+    // Read template bytes from sensor serial
+    // Template size for R503: 512 bytes (2 x 256 byte characteristics)
+    uint8_t templateBuffer[768];
+    memset(templateBuffer, 0xFF, sizeof(templateBuffer));
+    int bytesRead = 0;
+    
+    // Read with timeout
+    unsigned long startMillis = millis();
+    while (bytesRead < 768 && (millis() - startMillis) < 3000) {
+      if (mySerial.available()) {
+        templateBuffer[bytesRead] = mySerial.read();
+        bytesRead++;
+        startMillis = millis(); // reset timeout on each byte
+      }
+    }
+    
+    if (bytesRead == 0) {
+      Serial.println(String("No template data received for #") + id);
+      continue;
+    }
+    
+    // Encode template to base64
+    String b64 = base64::encode(templateBuffer, bytesRead);
+    
+    // Build JSON entry
+    if (!first) json += ",";
+    json += "{\"id\":" + String(id) + ",";
+    json += "\"name\":\"" + fingerList[id] + "\",";
+    json += "\"size\":" + String(bytesRead) + ",";
+    json += "\"template\":\"" + b64 + "\"}";
+    first = false;
+    
+    Serial.println(String("Exported finger #") + id + " (" + fingerList[id] + "), " + bytesRead + " bytes");
+  }
+  
+  json += "]";
+  return json;
+}
+
+bool FingerprintManager::importFingerprintFromTemplate(int id, const String& name, const uint8_t* templateData, int templateSize) {
+  if (id < 1 || id > 200 || templateSize <= 0)
+    return false;
+  
+  // Upload template to sensor char buffer 1 via serial
+  // Send FINGERPRINT_UPLOAD command (0x09) to load into char buffer 1
+  uint8_t packet[] = {0x09, 0x01}; // UploadCharBuffer, buffer 1
+  Adafruit_Fingerprint_Packet p(FINGERPRINT_COMMANDPACKET, sizeof(packet), packet);
+  finger.writeStructuredPacket(p);
+  
+  if (finger.getStructuredPacket(&p) != FINGERPRINT_OK)
+    return false;
+  if (p.data[0] != FINGERPRINT_OK)
+    return false;
+  
+  // Now send template data as data packets
+  // Split into packets of max 128 bytes (sensor packet_len)
+  int offset = 0;
+  while (offset < templateSize) {
+    int chunkSize = min(128, templateSize - offset);
+    bool isLast = (offset + chunkSize >= templateSize);
+    uint8_t packetType = isLast ? 0x08 : 0x02; // end packet or data packet
+    
+    Adafruit_Fingerprint_Packet dataPacket(packetType, chunkSize, (uint8_t*)(templateData + offset));
+    finger.writeStructuredPacket(dataPacket);
+    offset += chunkSize;
+  }
+  
+  delay(100);
+  
+  // Store the char buffer to flash at the given ID
+  uint8_t result = finger.storeModel(id);
+  if (result == FINGERPRINT_OK) {
+    // Save name to preferences
+    fingerList[id] = name;
+    Preferences preferences;
+    preferences.begin("fingerList", false);
+    preferences.putString(String(id).c_str(), name);
+    preferences.end();
+    Serial.println(String("Imported finger #") + id + " (" + name + ")");
+    return true;
+  } else {
+    Serial.println(String("Failed to store imported finger #") + id + ", rc=" + result);
+    return false;
+  }
 }
 

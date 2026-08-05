@@ -20,11 +20,14 @@ bool SettingsManager::loadAppSettings() {
         appSettings.mqttServer = preferences.getString("mqttServer", String(""));
         appSettings.mqttUsername = preferences.getString("mqttUsername", String(""));
         appSettings.mqttPassword = preferences.getString("mqttPassword", String(""));
+        appSettings.mqttPort = preferences.getInt("mqttPort", 1883);
         appSettings.mqttRootTopic = preferences.getString("mqttRootTopic", String("fingerprintDoorbell"));
         appSettings.ntpServer = preferences.getString("ntpServer", String("pool.ntp.org"));
         appSettings.sensorPin = preferences.getString("sensorPin", "00000000");
         appSettings.sensorPairingCode = preferences.getString("pairingCode", "");
         appSettings.sensorPairingValid = preferences.getBool("pairingValid", false);
+        appSettings.adminUser = preferences.getString("adminUser", String("admin"));
+        appSettings.adminPassword = preferences.getString("adminPass", String(""));
         preferences.end();
         return true;
     } else {
@@ -47,11 +50,14 @@ void SettingsManager::saveAppSettings() {
     preferences.putString("mqttServer", appSettings.mqttServer);
     preferences.putString("mqttUsername", appSettings.mqttUsername);
     preferences.putString("mqttPassword", appSettings.mqttPassword);
+    preferences.putInt("mqttPort", appSettings.mqttPort);
     preferences.putString("mqttRootTopic", appSettings.mqttRootTopic);
     preferences.putString("ntpServer", appSettings.ntpServer);
     preferences.putString("sensorPin", appSettings.sensorPin);
     preferences.putString("pairingCode", appSettings.sensorPairingCode);
     preferences.putBool("pairingValid", appSettings.sensorPairingValid);
+    preferences.putString("adminUser", appSettings.adminUser);
+    preferences.putString("adminPass", appSettings.adminPassword);
     preferences.end();
 }
 
@@ -131,3 +137,12 @@ String SettingsManager::generateNewPairingCode() {
     return String((char*)hexString);
 }
 
+bool SettingsManager::isAuthConfigured() {
+    return !appSettings.adminPassword.isEmpty();
+}
+
+bool SettingsManager::checkAuth(const String& user, const String& pass) {
+    if (!isAuthConfigured())
+        return true;  // no password set = allow access (first boot)
+    return (user == appSettings.adminUser && pass == appSettings.adminPassword);
+}
