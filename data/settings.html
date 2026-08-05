@@ -171,11 +171,21 @@
 	<div class="form-group">
 		<label class="col-md-4 control-label" for="btnFirmwareUpdate"></label>
 		<div class="col-md-4">
-			<a href="/backup" class="btn btn-default" download="fingerprints-backup.json">Backup Fingerprints</a>
+			<a href="/backup" class="btn btn-default">&#x1F4BE; Backup Fingerprints</a>
 			<button id="btnFirmwareUpdate" name="btnFirmwareUpdate" class="btn btn-info" type="submit" formaction="update">Firmware-Update </button>
 			<button id="btnDoPairing" name="btnDoPairing" class="btn btn-warning" type="submit" formaction="pairing">Pairing a new sensor </button>
 			<button id="btnDeleteAllFingerprints" name="btnDeleteAllFingerprints" class="btn btn-danger" type="submit" formaction="deleteAllFingerprints" onclick="return confirm('This will delete all fingerprints. Are you sure you wanna do that?')">Delete all Fingerprints</button>
 			<button id="btnFactoryReset" name="btnFactoryReset" class="btn btn-danger" type="submit" formaction="factoryReset" onclick="return confirm('This will delete all fingerprints, your settings and your WiFi configuration. Are you sure you wanna do that?')">Factory-Reset</button>
+		</div>
+	  </div>
+
+	  <div class="form-group">
+		<label class="col-md-4 control-label">Restore Fingerprints</label>
+		<div class="col-md-4">
+			<input type="file" id="restoreFile" accept=".json" class="form-control">
+			<br>
+			<button type="button" class="btn btn-warning" onclick="restoreFingerprints()">&#x1F504; Restore from Backup</button>
+			<small class="text-muted"><br>Upload a previously downloaded backup JSON file to restore fingerprints to the sensor.</small>
 		</div>
 	  </div>
 
@@ -184,6 +194,37 @@
 
 
 	<p></p>
+	<script>
+	function restoreFingerprints() {
+		var fileInput = document.getElementById('restoreFile');
+		if (!fileInput.files.length) {
+			alert('Please select a backup JSON file first.');
+			return;
+		}
+		if (!confirm('This will restore fingerprints from backup. Existing fingerprints with same IDs will be overwritten. Continue?')) {
+			return;
+		}
+		var file = fileInput.files[0];
+		var reader = new FileReader();
+		reader.onload = function(e) {
+			var xhr = new XMLHttpRequest();
+			xhr.open('POST', '/restore', true);
+			xhr.setRequestHeader('Content-Type', 'application/json');
+			xhr.onreadystatechange = function() {
+				if (xhr.readyState === 4) {
+					if (xhr.status === 200) {
+						alert('Restore completed! Check log for details.');
+						window.location.reload();
+					} else {
+						alert('Restore failed: ' + xhr.status);
+					}
+				}
+			};
+			xhr.send(e.target.result);
+		};
+		reader.readAsText(file);
+	}
+	</script>
 	<nav class="navbar navbar-default ">
 		<div class="container-fluid">
 		  <p class="navbar-text">FingerprintDoorbell, Version %VERSIONINFO%</p>

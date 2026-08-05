@@ -3,6 +3,7 @@
 
 #include <Adafruit_Fingerprint.h>
 #include <base64.h>
+#include "mbedtls/base64.h"
 
 bool FingerprintManager::connect() {
   

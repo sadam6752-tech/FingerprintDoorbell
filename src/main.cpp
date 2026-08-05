@@ -9,6 +9,7 @@
 #include <AsyncElegantOTA.h>
 #include <SPIFFS.h>
 #include <PubSubClient.h>
+#include "mbedtls/base64.h"
 #include "FingerprintManager.h"
 #include "SettingsManager.h"
 #include "global.h"
@@ -482,6 +483,108 @@ void startWebserver(){
       response->addHeader("Content-Disposition", "attachment; filename=\"fingerprints-backup.json\"");
       request->send(response);
     });
+
+    // ===== Restore: upload fingerprints JSON =====
+    webServer.on("/restore", HTTP_POST, 
+      // onRequest handler (called after body is received)
+      [](AsyncWebServerRequest *request){
+        request->redirect("/");
+      },
+      // onUpload handler (not used)
+      NULL,
+      // onBody handler (receives POST body)
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+        if (!authenticateRequest(request)) return;
+        
+        // Accumulate body data
+        static String bodyBuffer = "";
+        if (index == 0) {
+          bodyBuffer = "";
+          bodyBuffer.reserve(total);
+        }
+        for (size_t i = 0; i < len; i++) {
+          bodyBuffer += (char)data[i];
+        }
+        
+        // When complete, parse and import
+        if (index + len == total) {
+          notifyClients("Starting fingerprint restore...");
+          waitForMaintenanceMode();
+          
+          int imported = 0;
+          int failed = 0;
+          
+          // Simple JSON parser for our known format
+          // Format: [{"id":1,"name":"Alex","size":512,"template":"base64..."},...]
+          int searchPos = 0;
+          while (true) {
+            int objStart = bodyBuffer.indexOf('{', searchPos);
+            if (objStart < 0) break;
+            int objEnd = bodyBuffer.indexOf('}', objStart);
+            if (objEnd < 0) break;
+            
+            String obj = bodyBuffer.substring(objStart, objEnd + 1);
+            searchPos = objEnd + 1;
+            
+            // Extract id
+            int idIdx = obj.indexOf("\"id\":");
+            if (idIdx < 0) continue;
+            int id = obj.substring(idIdx + 5).toInt();
+            
+            // Extract name
+            int nameIdx = obj.indexOf("\"name\":\"");
+            if (nameIdx < 0) continue;
+            int nameStart = nameIdx + 8;
+            int nameEnd = obj.indexOf("\"", nameStart);
+            String name = obj.substring(nameStart, nameEnd);
+            
+            // Extract size
+            int sizeIdx = obj.indexOf("\"size\":");
+            int templateSize = 0;
+            if (sizeIdx >= 0) {
+              templateSize = obj.substring(sizeIdx + 7).toInt();
+            }
+            
+            // Extract template (base64)
+            int tplIdx = obj.indexOf("\"template\":\"");
+            if (tplIdx < 0) continue;
+            int tplStart = tplIdx + 12;
+            int tplEnd = obj.indexOf("\"", tplStart);
+            String b64Template = obj.substring(tplStart, tplEnd);
+            
+            // Decode base64
+            size_t decodedLen = 0;
+            mbedtls_base64_decode(NULL, 0, &decodedLen, (const unsigned char*)b64Template.c_str(), b64Template.length());
+            uint8_t* templateData = (uint8_t*)malloc(decodedLen);
+            if (!templateData) {
+              failed++;
+              continue;
+            }
+            size_t actualLen = 0;
+            int ret = mbedtls_base64_decode(templateData, decodedLen, &actualLen, (const unsigned char*)b64Template.c_str(), b64Template.length());
+            if (ret != 0) {
+              free(templateData);
+              failed++;
+              continue;
+            }
+            if (templateSize == 0) templateSize = actualLen;
+            
+            // Import
+            if (fingerManager.importFingerprintFromTemplate(id, name, templateData, templateSize)) {
+              imported++;
+            } else {
+              failed++;
+            }
+            free(templateData);
+          }
+          
+          currentMode = Mode::scan;
+          bodyBuffer = "";
+          notifyClients(String("Restore completed: ") + imported + " imported, " + failed + " failed.");
+          updateClientsFingerlist(fingerManager.getFingerListAsHtmlOptionList());
+        }
+      }
+    );
 
 
     webServer.onNotFound([](AsyncWebServerRequest *request){
