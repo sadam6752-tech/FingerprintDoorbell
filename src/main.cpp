@@ -16,7 +16,7 @@
 #include "WebUIHandler.h"
 
 // Watchdog timeout (seconds) — if loop() doesn't feed WDT within this time, ESP reboots
-#define WDT_TIMEOUT_SEC 30
+#define WDT_TIMEOUT_SEC 60
 
 // Crash recovery: after this many consecutive crashes, enter safe mode
 #define MAX_CRASH_COUNT 3
@@ -317,8 +317,7 @@ void setup()
   }
 
   // ===== Hardware Watchdog =====
-  esp_task_wdt_init(WDT_TIMEOUT_SEC, true); // true = panic (reboot) on timeout
-  esp_task_wdt_add(NULL); // add current task (loopTask) to WDT
+  // Initialized later, after all setup is complete
 
   // initialize GPIOs
   pinMode(doorbellOutputPin, OUTPUT); 
@@ -384,6 +383,11 @@ void setup()
   // If we got here without crashing, boot was successful — reset crash counter
   resetCrashCount();
   Serial.println("Boot successful. Free heap: " + String(ESP.getFreeHeap()) + " bytes");
+
+  // ===== Start Hardware Watchdog AFTER successful boot =====
+  esp_task_wdt_init(WDT_TIMEOUT_SEC, true); // true = panic (reboot) on timeout
+  esp_task_wdt_add(NULL); // add current task (loopTask) to WDT
+  Serial.println("Watchdog started (" + String(WDT_TIMEOUT_SEC) + "s timeout)");
 }
 
 void loop()
