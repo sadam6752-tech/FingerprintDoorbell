@@ -6,7 +6,7 @@
 #include <DNSServer.h>
 #include <time.h>
 #include <ESPAsyncWebServer.h>
-#include <AsyncElegantOTA.h>
+#include <ElegantOTA.h>
 #include <SPIFFS.h>
 #include <PubSubClient.h>
 #include "mbedtls/base64.h"
@@ -16,7 +16,7 @@
 
 enum class Mode { scan, enroll, wificonfig, maintenance };
 
-const char* VersionInfo = "0.5";
+const char* VersionInfo = "0.6";
 
 // ===================================================================================================================
 // Caution: below are not the credentials for connecting to your home network, they are for the Access Point mode!!!
@@ -608,7 +608,7 @@ void startWebserver(){
 
 
   // Enable Over-the-air updates at http://<IPAddress>/update
-  AsyncElegantOTA.begin(&webServer);
+  ElegantOTA.begin(&webServer, settingsManager.getAppSettings().adminUser.c_str(), settingsManager.getAppSettings().adminPassword.c_str());
   
   // Start server
   webServer.begin();
