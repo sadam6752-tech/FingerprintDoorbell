@@ -15,7 +15,7 @@
 
 enum class Mode { scan, enroll, wificonfig, maintenance };
 
-const char* VersionInfo = "0.4";
+const char* VersionInfo = "0.5";
 
 // ===================================================================================================================
 // Caution: below are not the credentials for connecting to your home network, they are for the Access Point mode!!!
@@ -42,6 +42,7 @@ String logMessages[logMessagesCount]; // log messages, 0=most recent log message
 bool shouldReboot = false;
 unsigned long wifiReconnectPreviousMillis = 0;
 unsigned long mqttReconnectPreviousMillis = 0;
+unsigned long mqttReconnectInterval = 5000; // start with 5s, grows exponentially
 
 String enrollId;
 String enrollName;
@@ -110,6 +111,35 @@ bool waitForMaintenanceMode() {
   return true;
 }
 
+// ===== Authentication helper =====
+bool authenticateRequest(AsyncWebServerRequest *request) {
+  if (!settingsManager.isAuthConfigured())
+    return true;  // no password configured yet, allow access
+  if (!request->authenticate(settingsManager.getAppSettings().adminUser.c_str(), 
+                              settingsManager.getAppSettings().adminPassword.c_str())) {
+    request->requestAuthentication();
+    return false;
+  }
+  return true;
+}
+
+// ===== URL decode helper (fix for special chars in MQTT password) =====
+String urlDecode(const String& input) {
+  String decoded = "";
+  for (unsigned int i = 0; i < input.length(); i++) {
+    if (input[i] == '%' && i + 2 < input.length()) {
+      char hex[3] = { input[i+1], input[i+2], 0 };
+      decoded += (char)strtol(hex, nullptr, 16);
+      i += 2;
+    } else if (input[i] == '+') {
+      decoded += ' ';
+    } else {
+      decoded += input[i];
+    }
+  }
+  return decoded;
+}
+
 // Replaces placeholder in HTML pages
 String processor(const String& var){
   if(var == "LOGMESSAGES"){
@@ -135,8 +165,17 @@ String processor(const String& var){
     return settingsManager.getAppSettings().mqttPassword;
   } else if (var == "MQTT_ROOTTOPIC") {
     return settingsManager.getAppSettings().mqttRootTopic;
+  } else if (var == "MQTT_PORT") {
+    return String(settingsManager.getAppSettings().mqttPort);
   } else if (var == "NTP_SERVER") {
     return settingsManager.getAppSettings().ntpServer;
+  } else if (var == "ADMIN_USER") {
+    return settingsManager.getAppSettings().adminUser;
+  } else if (var == "ADMIN_PASSWORD") {
+    if (settingsManager.getAppSettings().adminPassword.isEmpty())
+      return "";
+    else
+      return "********";
   }
 
   return String();
@@ -314,10 +353,12 @@ void startWebserver(){
     
     // Route for root / web page
     webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       request->send(SPIFFS, "/index.html", String(), false, processor);
     });
 
     webServer.on("/enroll", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("startEnrollment"))
       {
         enrollId = request->arg("newFingerprintId");
@@ -328,6 +369,7 @@ void startWebserver(){
     });
 
     webServer.on("/editFingerprints", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("selectedFingerprint"))
       {
         if(request->hasArg("btnDelete"))
@@ -348,15 +390,23 @@ void startWebserver(){
     });
 
     webServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("btnSaveSettings"))
       {
         Serial.println("Save settings");
         AppSettings settings = settingsManager.getAppSettings();
         settings.mqttServer = request->arg("mqtt_server");
         settings.mqttUsername = request->arg("mqtt_username");
-        settings.mqttPassword = request->arg("mqtt_password");
+        settings.mqttPassword = urlDecode(request->arg("mqtt_password"));
+        settings.mqttPort = request->arg("mqtt_port").toInt();
+        if (settings.mqttPort <= 0 || settings.mqttPort > 65535) settings.mqttPort = 1883;
         settings.mqttRootTopic = request->arg("mqtt_rootTopic");
         settings.ntpServer = request->arg("ntpServer");
+        // Admin credentials
+        String newAdminUser = request->arg("admin_user");
+        String newAdminPass = request->arg("admin_password");
+        if (!newAdminUser.isEmpty()) settings.adminUser = newAdminUser;
+        if (!newAdminPass.isEmpty() && newAdminPass != "********") settings.adminPassword = newAdminPass;
         settingsManager.saveAppSettings(settings);
         request->redirect("/");  
         shouldReboot = true;
@@ -367,6 +417,7 @@ void startWebserver(){
 
 
     webServer.on("/pairing", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("btnDoPairing"))
       {
         Serial.println("Do (re)pairing");
@@ -380,6 +431,7 @@ void startWebserver(){
 
 
     webServer.on("/factoryReset", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("btnFactoryReset"))
       {
         notifyClients("Factory reset initiated...");
@@ -402,6 +454,7 @@ void startWebserver(){
 
 
     webServer.on("/deleteAllFingerprints", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
       if(request->hasArg("btnDeleteAllFingerprints"))
       {
         notifyClients("Deleting all fingerprints...");
@@ -427,6 +480,7 @@ void startWebserver(){
 
   // common url callbacks
   webServer.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!authenticateRequest(request)) return;
     request->redirect("/");
     shouldReboot = true;
   });
@@ -469,6 +523,12 @@ void mqttCallback(char* topic, byte* message, unsigned int length) {
     }
   }
 
+  if (String(topic) == String(settingsManager.getAppSettings().mqttRootTopic) + "/reboot") {
+    if(messageTemp == "on"){
+      shouldReboot = true;
+    }
+  }
+
   #ifdef CUSTOM_GPIOS
     if (String(topic) == String(settingsManager.getAppSettings().mqttRootTopic) + "/customOutput1") {
       if(messageTemp == "on"){
@@ -496,32 +556,37 @@ void connectMqttClient() {
     // Attempt to connect
     bool connectResult;
     
-    // connect with or witout authentication
-    String lastWillTopic = settingsManager.getAppSettings().mqttRootTopic + "/lastLogMessage";
-    String lastWillMessage = "FingerprintDoorbell disconnected unexpectedly";
+    // connect with or without authentication
+    String mqttRootTopic = settingsManager.getAppSettings().mqttRootTopic;
+    String statusTopic = mqttRootTopic + "/status";
+    String lastWillMessage = "offline";
     if (settingsManager.getAppSettings().mqttUsername.isEmpty() || settingsManager.getAppSettings().mqttPassword.isEmpty())
-      connectResult = mqttClient.connect(settingsManager.getWifiSettings().hostname.c_str(),lastWillTopic.c_str(), 1, false, lastWillMessage.c_str());
+      connectResult = mqttClient.connect(settingsManager.getWifiSettings().hostname.c_str(), statusTopic.c_str(), 1, true, lastWillMessage.c_str());
     else
-      connectResult = mqttClient.connect(settingsManager.getWifiSettings().hostname.c_str(), settingsManager.getAppSettings().mqttUsername.c_str(), settingsManager.getAppSettings().mqttPassword.c_str(), lastWillTopic.c_str(), 1, false, lastWillMessage.c_str());
+      connectResult = mqttClient.connect(settingsManager.getWifiSettings().hostname.c_str(), settingsManager.getAppSettings().mqttUsername.c_str(), settingsManager.getAppSettings().mqttPassword.c_str(), statusTopic.c_str(), 1, true, lastWillMessage.c_str());
 
     if (connectResult) {
       // success
       Serial.println("connected");
+      mqttReconnectInterval = 5000; // reset backoff on success
+      // Publish online status (retained)
+      mqttClient.publish(statusTopic.c_str(), "online", true);
       // Subscribe
-      mqttClient.subscribe((settingsManager.getAppSettings().mqttRootTopic + "/ignoreTouchRing").c_str(), 1); // QoS = 1 (at least once)
+      mqttClient.subscribe((mqttRootTopic + "/ignoreTouchRing").c_str(), 1);
+      mqttClient.subscribe((mqttRootTopic + "/reboot").c_str(), 1);
       #ifdef CUSTOM_GPIOS
-        mqttClient.subscribe((settingsManager.getAppSettings().mqttRootTopic + "/customOutput1").c_str(), 1); // QoS = 1 (at least once)
-        mqttClient.subscribe((settingsManager.getAppSettings().mqttRootTopic + "/customOutput2").c_str(), 1); // QoS = 1 (at least once)
+        mqttClient.subscribe((mqttRootTopic + "/customOutput1").c_str(), 1);
+        mqttClient.subscribe((mqttRootTopic + "/customOutput2").c_str(), 1);
       #endif
-
-
 
     } else {
       if (mqttClient.state() == 4 || mqttClient.state() == 5) {
         mqttConfigValid = false;
         notifyClients("Failed to connect to MQTT Server: bad credentials or not authorized. Will not try again, please check your settings.");
       } else {
-        notifyClients(String("Failed to connect to MQTT Server, rc=") + mqttClient.state() + ", try again in 30 seconds");
+        notifyClients(String("Failed to connect to MQTT Server, rc=") + mqttClient.state() + ", try again in " + (mqttReconnectInterval/1000) + " seconds");
+        // exponential backoff: 5s, 10s, 20s, 40s, max 60s
+        mqttReconnectInterval = min(mqttReconnectInterval * 2, 60000ul);
       }
     }
   }
@@ -663,7 +728,7 @@ void setup()
         {
           mqttConfigValid = true;
           Serial.println("IP used for MQTT server: " + mqttServerIp.toString());
-          mqttClient.setServer(mqttServerIp , 1883);
+          mqttClient.setServer(mqttServerIp, settingsManager.getAppSettings().mqttPort);
           mqttClient.setCallback(mqttCallback);
           connectMqttClient();
         }
@@ -706,7 +771,7 @@ void loop()
 
     // reconnect mqtt if down
     if (!settingsManager.getAppSettings().mqttServer.isEmpty()) {
-      if (!mqttClient.connected() && (currentMillis - mqttReconnectPreviousMillis >= 30000ul)) {
+      if (!mqttClient.connected() && (currentMillis - mqttReconnectPreviousMillis >= mqttReconnectInterval)) {
         connectMqttClient();
         mqttReconnectPreviousMillis = currentMillis;
       }
