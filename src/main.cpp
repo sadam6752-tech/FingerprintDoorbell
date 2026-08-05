@@ -470,6 +470,20 @@ void startWebserver(){
     });
 
 
+    // ===== Backup: download fingerprints as JSON =====
+    webServer.on("/backup", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      notifyClients("Starting fingerprint backup...");
+      waitForMaintenanceMode();
+      String json = fingerManager.exportFingerprintsToJson();
+      currentMode = Mode::scan;
+      notifyClients("Backup completed.");
+      AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+      response->addHeader("Content-Disposition", "attachment; filename=\"fingerprints-backup.json\"");
+      request->send(response);
+    });
+
+
     webServer.onNotFound([](AsyncWebServerRequest *request){
       request->send(404);
     });
