@@ -180,7 +180,9 @@ void startWebserver(){
         settings.gmtOffsetHours = request->arg("gmtOffset").toInt();
         // Touch ring setting
         String touchRingSetting = request->arg("ignoreTouchRing");
-        fingerManager.setIgnoreTouchRing(touchRingSetting == "on");
+        bool newTouchRingState = (touchRingSetting == "on");
+        fingerManager.setIgnoreTouchRing(newTouchRingState);
+        settings.ignoreTouchRing = newTouchRingState;
         // Admin credentials
         String newAdminUser = request->arg("admin_user");
         String newAdminPass = request->arg("admin_password");

@@ -20,9 +20,15 @@ void mqttCallback(char* topic, byte* message, unsigned int length) {
   if (String(topic) == String(settingsManager.getAppSettings().mqttRootTopic) + "/ignoreTouchRing") {
     if(messageTemp == "on"){
       fingerManager.setIgnoreTouchRing(true);
+      AppSettings s = settingsManager.getAppSettings();
+      s.ignoreTouchRing = true;
+      settingsManager.saveAppSettings(s);
     }
     else if(messageTemp == "off"){
       fingerManager.setIgnoreTouchRing(false);
+      AppSettings s = settingsManager.getAppSettings();
+      s.ignoreTouchRing = false;
+      settingsManager.saveAppSettings(s);
     }
   }
 

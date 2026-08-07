@@ -333,6 +333,7 @@ void setup()
 
   if (!safeMode) {
     fingerManager.connect();
+    fingerManager.setIgnoreTouchRing(settingsManager.getAppSettings().ignoreTouchRing);
     
     if (!checkPairingValid())
       notifyClients("Security issue! Pairing with sensor is invalid. This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page. MQTT messages regarding matching fingerprints will not been sent until pairing is valid again.");

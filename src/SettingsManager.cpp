@@ -27,6 +27,7 @@ bool SettingsManager::loadAppSettings() {
         appSettings.sensorPin = preferences.getString("sensorPin", "00000000");
         appSettings.sensorPairingCode = preferences.getString("pairingCode", "");
         appSettings.sensorPairingValid = preferences.getBool("pairingValid", false);
+        appSettings.ignoreTouchRing = preferences.getBool("ignoreTouchR", false);
         appSettings.adminUser = preferences.getString("adminUser", String("admin"));
         appSettings.adminPassword = preferences.getString("adminPass", String(""));
         preferences.end();
@@ -58,6 +59,7 @@ void SettingsManager::saveAppSettings() {
     preferences.putString("sensorPin", appSettings.sensorPin);
     preferences.putString("pairingCode", appSettings.sensorPairingCode);
     preferences.putBool("pairingValid", appSettings.sensorPairingValid);
+    preferences.putBool("ignoreTouchR", appSettings.ignoreTouchRing);
     preferences.putString("adminUser", appSettings.adminUser);
     preferences.putString("adminPass", appSettings.adminPassword);
     preferences.end();

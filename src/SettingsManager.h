@@ -21,6 +21,7 @@ struct AppSettings {
     String sensorPin = "00000000";
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;
+    bool   ignoreTouchRing = false;
     String adminUser = "admin";
     String adminPassword = "";  // empty = no auth (first boot)
 };
