@@ -22,7 +22,7 @@
 #define MAX_CRASH_COUNT 3
 
 // ===== Global variable DEFINITIONS =====
-const char* VersionInfo = "0.7";
+const char* VersionInfo = "0.8";
 const int doorbellOutputPin = 19;
 bool safeMode = false; // true = only WiFi+WebUI, no scanning/MQTT
 unsigned long lastHeapCheck = 0;
@@ -350,12 +350,18 @@ void setup()
     Serial.println("Started normal operating mode");
     currentMode = Mode::scan;
     if (initWifi()) {
+      // Init NTP after WiFi is connected
+      String ntpServer = settingsManager.getAppSettings().ntpServer;
+      if (!ntpServer.isEmpty()) {
+        long gmtOffset = settingsManager.getAppSettings().gmtOffsetHours * 3600L;
+        configTime(gmtOffset, 0, ntpServer.c_str());
+        Serial.println("NTP configured: " + ntpServer + " (GMT+" + String(settingsManager.getAppSettings().gmtOffsetHours) + ")");
+      }
       startWebserver();
       if (settingsManager.getAppSettings().mqttServer.isEmpty()) {
         mqttConfigValid = false;
         notifyClients("Error: No MQTT Broker is configured! Please go to settings and enter your server URL + user credentials.");
       } else {
-        delay(5000);
         IPAddress mqttServerIp;
         if (WiFi.hostByName(settingsManager.getAppSettings().mqttServer.c_str(), mqttServerIp))
         {
@@ -363,7 +369,7 @@ void setup()
           Serial.println("IP used for MQTT server: " + mqttServerIp.toString());
           mqttClient.setServer(mqttServerIp, settingsManager.getAppSettings().mqttPort);
           mqttClient.setCallback(mqttCallback);
-          connectMqttClient();
+          // MQTT will connect in loop() via reconnect logic — no blocking delay here
         }
         else {
           mqttConfigValid = false;

@@ -17,6 +17,7 @@ struct AppSettings {
     int    mqttPort = 1883;
     String mqttRootTopic = "fingerprintDoorbell";
     String ntpServer = "pool.ntp.org";
+    int    gmtOffsetHours = 0;
     String sensorPin = "00000000";
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;

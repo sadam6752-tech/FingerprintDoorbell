@@ -38,6 +38,8 @@ String processor(const String& var){
     return String(settingsManager.getAppSettings().mqttPort);
   } else if (var == "NTP_SERVER") {
     return settingsManager.getAppSettings().ntpServer;
+  } else if (var == "GMT_OFFSET") {
+    return String(settingsManager.getAppSettings().gmtOffsetHours);
   } else if (var == "ADMIN_USER") {
     return settingsManager.getAppSettings().adminUser;
   } else if (var == "ADMIN_PASSWORD") {
@@ -56,13 +58,17 @@ void startWebserver(){
   // Initialize SPIFFS
   if(!SPIFFS.begin(true)){
     Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
+    // Fallback: register a simple error page so user knows to upload filesystem
+    webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/html", "<html><body><h2>SPIFFS Error</h2><p>Filesystem not available. Please upload via <a href='/update'>/update</a> (Filesystem mode).</p></body></html>");
+    });
+    webServer.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/html", "<html><body><h2>SPIFFS Error</h2><p>Upload filesystem via <a href='/update'>/update</a></p></body></html>");
+    });
+    goto register_common_routes;
   }
 
-  // Init time by NTP Client
-  const long gmtOffset_sec = 0;
-  const int daylightOffset_sec = 0;
-  configTime(gmtOffset_sec, daylightOffset_sec, settingsManager.getAppSettings().ntpServer.c_str());
+  // NTP will be configured after WiFi is connected (in main setup)
   
   // webserver for normal operating or wifi config?
   if (currentMode == Mode::wificonfig)
@@ -162,19 +168,25 @@ void startWebserver(){
         AppSettings settings = settingsManager.getAppSettings();
         settings.mqttServer = request->arg("mqtt_server");
         settings.mqttUsername = request->arg("mqtt_username");
-        settings.mqttPassword = urlDecode(request->arg("mqtt_password"));
+        settings.mqttPassword = request->arg("mqtt_password");
         settings.mqttPort = request->arg("mqtt_port").toInt();
         if (settings.mqttPort <= 0 || settings.mqttPort > 65535) settings.mqttPort = 1883;
         settings.mqttRootTopic = request->arg("mqtt_rootTopic");
         settings.ntpServer = request->arg("ntpServer");
+        settings.gmtOffsetHours = request->arg("gmtOffset").toInt();
         // Admin credentials
         String newAdminUser = request->arg("admin_user");
         String newAdminPass = request->arg("admin_password");
         if (!newAdminUser.isEmpty()) settings.adminUser = newAdminUser;
         if (!newAdminPass.isEmpty() && newAdminPass != "********") settings.adminPassword = newAdminPass;
         settingsManager.saveAppSettings(settings);
-        request->redirect("/");  
-        shouldReboot = true;
+        // Apply NTP change without reboot
+        if (!settings.ntpServer.isEmpty()) {
+          long gmtOffset = settings.gmtOffsetHours * 3600L;
+          configTime(gmtOffset, 0, settings.ntpServer.c_str());
+        }
+        request->redirect("/");
+        shouldReboot = true; // still reboot to re-init MQTT with new settings
       } else {
         request->send(SPIFFS, "/settings.html", String(), false, processor);
       }
@@ -351,6 +363,24 @@ void startWebserver(){
     );
 
 
+    // ===== Debug endpoint (no auth) — for diagnosing save issues =====
+    webServer.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
+      AppSettings s = settingsManager.getAppSettings();
+      String info = "MQTT Server: [" + s.mqttServer + "]\n";
+      info += "MQTT User: [" + s.mqttUsername + "]\n";
+      info += "MQTT Pass length: " + String(s.mqttPassword.length()) + "\n";
+      info += "MQTT Port: " + String(s.mqttPort) + "\n";
+      info += "MQTT Topic: [" + s.mqttRootTopic + "]\n";
+      info += "NTP: [" + s.ntpServer + "]\n";
+      info += "GMT Offset: " + String(s.gmtOffsetHours) + "h\n";
+      info += "Admin User: [" + s.adminUser + "]\n";
+      info += "Admin Pass length: " + String(s.adminPassword.length()) + "\n";
+      info += "Auth configured: " + String(settingsManager.isAuthConfigured() ? "YES" : "NO") + "\n";
+      info += "Free heap: " + String(ESP.getFreeHeap()) + "\n";
+      info += "Uptime: " + String(millis() / 1000) + "s\n";
+      request->send(200, "text/plain", info);
+    });
+
     webServer.onNotFound([](AsyncWebServerRequest *request){
       request->send(404);
     });
@@ -358,6 +388,7 @@ void startWebserver(){
     
   } // end normal operating mode
 
+  register_common_routes:
 
   // common url callbacks
   webServer.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){

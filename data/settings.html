@@ -89,6 +89,10 @@ reader.readAsText(f.files[0]);
 <input id="ntpServer" name="ntpServer" type="text" placeholder="pool.ntp.org" value="%NTP_SERVER%">
 <small>Used for log timestamps.</small>
 
+<label for="gmtOffset">Timezone (GMT offset hours)</label>
+<input id="gmtOffset" name="gmtOffset" type="number" placeholder="0" value="%GMT_OFFSET%">
+<small>Example: +2 for CEST, +1 for CET, -5 for EST</small>
+
 <div class="btns">
 <button name="btnSaveSettings" class="btn btn-green">Save and Restart</button>
 </div>
