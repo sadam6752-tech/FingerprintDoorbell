@@ -363,6 +363,20 @@ void startWebserver(){
     );
 
 
+    // ===== Add/sync finger name without enrollment =====
+    webServer.on("/add-name", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if (request->hasArg("id") && request->hasArg("name")) {
+        int id = request->arg("id").toInt();
+        String name = request->arg("name");
+        if (id >= 1 && id <= 200 && !name.isEmpty()) {
+          fingerManager.renameFinger(id, name);
+          notifyClients(String("Name set: #") + id + " = " + name);
+        }
+      }
+      request->redirect("/");
+    });
+
     // ===== Debug endpoint (no auth) — for diagnosing save issues =====
     webServer.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
       AppSettings s = settingsManager.getAppSettings();
@@ -380,6 +394,80 @@ void startWebserver(){
       info += "Uptime: " + String(millis() / 1000) + "s\n";
       request->send(200, "text/plain", info);
     });
+
+    // ===== Backup Settings (JSON, no fingerprints) =====
+    webServer.on("/backup-settings", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      AppSettings s = settingsManager.getAppSettings();
+      String json = "{";
+      json += "\"mqttServer\":\"" + s.mqttServer + "\",";
+      json += "\"mqttUsername\":\"" + s.mqttUsername + "\",";
+      json += "\"mqttPassword\":\"" + s.mqttPassword + "\",";
+      json += "\"mqttPort\":" + String(s.mqttPort) + ",";
+      json += "\"mqttRootTopic\":\"" + s.mqttRootTopic + "\",";
+      json += "\"ntpServer\":\"" + s.ntpServer + "\",";
+      json += "\"gmtOffsetHours\":" + String(s.gmtOffsetHours) + ",";
+      json += "\"adminUser\":\"" + s.adminUser + "\",";
+      json += "\"adminPassword\":\"" + s.adminPassword + "\"";
+      json += "}";
+      AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+      response->addHeader("Content-Disposition", "attachment; filename=\"settings-backup.json\"");
+      request->send(response);
+    });
+
+    // ===== Restore Settings from JSON =====
+    webServer.on("/restore-settings", HTTP_POST,
+      [](AsyncWebServerRequest *request){
+        request->send(200, "text/plain", "Settings restored. Rebooting...");
+        shouldReboot = true;
+      },
+      NULL,
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+        if (!authenticateRequest(request)) return;
+
+        static String bodyBuffer = "";
+        if (index == 0) {
+          bodyBuffer = "";
+          bodyBuffer.reserve(total);
+        }
+        for (size_t i = 0; i < len; i++) {
+          bodyBuffer += (char)data[i];
+        }
+
+        if (index + len == total) {
+          // Parse JSON settings
+          AppSettings settings = settingsManager.getAppSettings();
+
+          auto extractString = [&](const String& key) -> String {
+            int idx = bodyBuffer.indexOf("\"" + key + "\":\"");
+            if (idx < 0) return "";
+            int start = idx + key.length() + 4;
+            int end = bodyBuffer.indexOf("\"", start);
+            return (end > start) ? bodyBuffer.substring(start, end) : "";
+          };
+          auto extractInt = [&](const String& key) -> int {
+            int idx = bodyBuffer.indexOf("\"" + key + "\":");
+            if (idx < 0) return 0;
+            return bodyBuffer.substring(idx + key.length() + 3).toInt();
+          };
+
+          String val;
+          val = extractString("mqttServer"); if (!val.isEmpty()) settings.mqttServer = val;
+          val = extractString("mqttUsername"); settings.mqttUsername = val;
+          val = extractString("mqttPassword"); if (!val.isEmpty()) settings.mqttPassword = val;
+          settings.mqttPort = extractInt("mqttPort"); if (settings.mqttPort <= 0) settings.mqttPort = 1883;
+          val = extractString("mqttRootTopic"); if (!val.isEmpty()) settings.mqttRootTopic = val;
+          val = extractString("ntpServer"); if (!val.isEmpty()) settings.ntpServer = val;
+          settings.gmtOffsetHours = extractInt("gmtOffsetHours");
+          val = extractString("adminUser"); if (!val.isEmpty()) settings.adminUser = val;
+          val = extractString("adminPassword"); if (!val.isEmpty()) settings.adminPassword = val;
+
+          settingsManager.saveAppSettings(settings);
+          bodyBuffer = "";
+          notifyClients("Settings restored from backup.");
+        }
+      }
+    );
 
     webServer.onNotFound([](AsyncWebServerRequest *request){
       request->send(404);

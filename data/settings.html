@@ -52,6 +52,20 @@ xhr.send(e.target.result);
 };
 reader.readAsText(f.files[0]);
 }
+function restoreSettings(){
+var f=document.getElementById('restoreSettingsFile');
+if(!f.files.length){alert('Please select a settings backup JSON file.');return;}
+if(!confirm('Restore settings? Device will reboot with new settings.')){return;}
+var reader=new FileReader();
+reader.onload=function(e){
+var xhr=new XMLHttpRequest();
+xhr.open('POST','/restore-settings',true);
+xhr.setRequestHeader('Content-Type','application/json');
+xhr.onreadystatechange=function(){if(xhr.readyState===4){if(xhr.status===200){alert('Settings restored! Device rebooting...');setTimeout(function(){location.reload();},5000);}else{alert('Failed: '+xhr.status);}}};
+xhr.send(e.target.result);
+};
+reader.readAsText(f.files[0]);
+}
 </script>
 
 <nav class="nav">
@@ -117,7 +131,8 @@ reader.readAsText(f.files[0]);
 <div class="card">
 <h2>Advanced Actions</h2>
 <div class="btns">
-<a href="/backup" class="btn btn-gray">💾 Backup</a>
+<a href="/backup" class="btn btn-gray">💾 Backup FP</a>
+<a href="/backup-settings" class="btn btn-gray">⚙️ Backup Settings</a>
 <button name="btnFirmwareUpdate" class="btn btn-blue" type="submit" formaction="update">Firmware Update</button>
 <button name="btnDoPairing" class="btn btn-orange" type="submit" formaction="pairing">Pair Sensor</button>
 </div>
@@ -129,7 +144,13 @@ reader.readAsText(f.files[0]);
 <label>Restore Fingerprints from Backup</label>
 <input type="file" id="restoreFile" accept=".json">
 <div class="btns">
-<button type="button" class="btn btn-orange" onclick="restoreFingerprints()">🔄 Restore</button>
+<button type="button" class="btn btn-orange" onclick="restoreFingerprints()">🔄 Restore FP</button>
+</div>
+<hr>
+<label>Restore Settings from Backup</label>
+<input type="file" id="restoreSettingsFile" accept=".json">
+<div class="btns">
+<button type="button" class="btn btn-orange" onclick="restoreSettings()">⚙️ Restore Settings</button>
 </div>
 </div>
 </form>
