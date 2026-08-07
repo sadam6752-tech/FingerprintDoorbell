@@ -40,6 +40,10 @@ String processor(const String& var){
     return settingsManager.getAppSettings().ntpServer;
   } else if (var == "GMT_OFFSET") {
     return String(settingsManager.getAppSettings().gmtOffsetHours);
+  } else if (var == "TOUCHRING_OFF_SEL") {
+    return fingerManager.getIgnoreTouchRing() ? "" : "selected";
+  } else if (var == "TOUCHRING_ON_SEL") {
+    return fingerManager.getIgnoreTouchRing() ? "selected" : "";
   } else if (var == "ADMIN_USER") {
     return settingsManager.getAppSettings().adminUser;
   } else if (var == "ADMIN_PASSWORD") {
@@ -174,6 +178,9 @@ void startWebserver(){
         settings.mqttRootTopic = request->arg("mqtt_rootTopic");
         settings.ntpServer = request->arg("ntpServer");
         settings.gmtOffsetHours = request->arg("gmtOffset").toInt();
+        // Touch ring setting
+        String touchRingSetting = request->arg("ignoreTouchRing");
+        fingerManager.setIgnoreTouchRing(touchRingSetting == "on");
         // Admin credentials
         String newAdminUser = request->arg("admin_user");
         String newAdminPass = request->arg("admin_password");

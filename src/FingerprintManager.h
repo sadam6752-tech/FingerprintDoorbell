@@ -60,6 +60,7 @@ class FingerprintManager {
     void renameFinger(int id, String newName);
     String getFingerListAsHtmlOptionList();
     void setIgnoreTouchRing(bool state);
+    bool getIgnoreTouchRing();
     bool isFingerOnSensor();
     void setLedRingError();
     void setLedRingWifiConfig();

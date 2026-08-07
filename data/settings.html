@@ -107,6 +107,13 @@ reader.readAsText(f.files[0]);
 <input id="gmtOffset" name="gmtOffset" type="number" placeholder="0" value="%GMT_OFFSET%">
 <small>Example: +2 for CEST, +1 for CET, -5 for EST</small>
 
+<label for="ignoreTouchRing">Ignore Touch Ring</label>
+<select id="ignoreTouchRing" name="ignoreTouchRing" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="off" %TOUCHRING_OFF_SEL%>Off (sensitive — ring on any touch)</option>
+<option value="on" %TOUCHRING_ON_SEL%>On (ignore ring — only full finger scan)</option>
+</select>
+<small>Set to "On" during rain to prevent false ring events.</small>
+
 <div class="btns">
 <button name="btnSaveSettings" class="btn btn-green">Save and Restart</button>
 </div>

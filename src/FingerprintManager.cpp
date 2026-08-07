@@ -429,6 +429,10 @@ void FingerprintManager::setIgnoreTouchRing(bool state) {
   }
 }
 
+bool FingerprintManager::getIgnoreTouchRing() {
+  return ignoreTouchRing;
+}
+
 
 bool FingerprintManager::isRingTouched() {
   if (digitalRead(touchRingPin) == LOW) // LOW = touched. Caution: touchSignal on this pin occour only once (at beginning of touching the ring, not every iteration if you keep your finger on the ring)
