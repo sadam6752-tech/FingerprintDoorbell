@@ -24,6 +24,8 @@ bool SettingsManager::loadAppSettings() {
         appSettings.mqttRootTopic = preferences.getString("mqttRootTopic", String("fingerprintDoorbell"));
         appSettings.ntpServer = preferences.getString("ntpServer", String("pool.ntp.org"));
         appSettings.gmtOffsetHours = preferences.getInt("gmtOffset", 0);
+        appSettings.httpMatchUrl = preferences.getString("httpMatchUrl", String(""));
+        appSettings.httpRingUrl = preferences.getString("httpRingUrl", String(""));
         appSettings.sensorPin = preferences.getString("sensorPin", "00000000");
         appSettings.sensorPairingCode = preferences.getString("pairingCode", "");
         appSettings.sensorPairingValid = preferences.getBool("pairingValid", false);
@@ -56,6 +58,8 @@ void SettingsManager::saveAppSettings() {
     preferences.putString("mqttRootTopic", appSettings.mqttRootTopic);
     preferences.putString("ntpServer", appSettings.ntpServer);
     preferences.putInt("gmtOffset", appSettings.gmtOffsetHours);
+    preferences.putString("httpMatchUrl", appSettings.httpMatchUrl);
+    preferences.putString("httpRingUrl", appSettings.httpRingUrl);
     preferences.putString("sensorPin", appSettings.sensorPin);
     preferences.putString("pairingCode", appSettings.sensorPairingCode);
     preferences.putBool("pairingValid", appSettings.sensorPairingValid);

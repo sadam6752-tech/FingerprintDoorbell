@@ -107,6 +107,14 @@ reader.readAsText(f.files[0]);
 <input id="gmtOffset" name="gmtOffset" type="number" placeholder="0" value="%GMT_OFFSET%">
 <small>Example: +2 for CEST, +1 for CET, -5 for EST</small>
 
+<label for="httpMatchUrl">HTTP Match URL (optional)</label>
+<input id="httpMatchUrl" name="httpMatchUrl" type="text" placeholder="http://192.168.1.x:8087/set/..." value="%HTTP_MATCH_URL%">
+<small>Called on fingerprint match. Placeholders: {id}, {name}, {confidence}</small>
+
+<label for="httpRingUrl">HTTP Ring URL (optional)</label>
+<input id="httpRingUrl" name="httpRingUrl" type="text" placeholder="http://192.168.1.x:8087/set/..." value="%HTTP_RING_URL%">
+<small>Called when unknown finger (ring event). Leave empty to disable.</small>
+
 <label for="ignoreTouchRing">Ignore Touch Ring</label>
 <select id="ignoreTouchRing" name="ignoreTouchRing" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
 <option value="off" %TOUCHRING_OFF_SEL%>Off (sensitive — ring on any touch)</option>

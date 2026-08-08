@@ -18,6 +18,8 @@ struct AppSettings {
     String mqttRootTopic = "fingerprintDoorbell";
     String ntpServer = "pool.ntp.org";
     int    gmtOffsetHours = 0;
+    String httpMatchUrl = "";   // called on fingerprint match, supports {id}, {name}, {confidence}
+    String httpRingUrl = "";    // called on ring event (unknown finger)
     String sensorPin = "00000000";
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;

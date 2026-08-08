@@ -40,6 +40,10 @@ String processor(const String& var){
     return settingsManager.getAppSettings().ntpServer;
   } else if (var == "GMT_OFFSET") {
     return String(settingsManager.getAppSettings().gmtOffsetHours);
+  } else if (var == "HTTP_MATCH_URL") {
+    return settingsManager.getAppSettings().httpMatchUrl;
+  } else if (var == "HTTP_RING_URL") {
+    return settingsManager.getAppSettings().httpRingUrl;
   } else if (var == "TOUCHRING_OFF_SEL") {
     return fingerManager.getIgnoreTouchRing() ? "" : "selected";
   } else if (var == "TOUCHRING_ON_SEL") {
@@ -178,6 +182,8 @@ void startWebserver(){
         settings.mqttRootTopic = request->arg("mqtt_rootTopic");
         settings.ntpServer = request->arg("ntpServer");
         settings.gmtOffsetHours = request->arg("gmtOffset").toInt();
+        settings.httpMatchUrl = request->arg("httpMatchUrl");
+        settings.httpRingUrl = request->arg("httpRingUrl");
         // Touch ring setting
         String touchRingSetting = request->arg("ignoreTouchRing");
         bool newTouchRingState = (touchRingSetting == "on");

@@ -6,6 +6,7 @@
 #include <time.h>
 #include <ESPAsyncWebServer.h>
 #include <PubSubClient.h>
+#include <HTTPClient.h>
 #include <esp_task_wdt.h>
 #include <Preferences.h>
 #include "FingerprintManager.h"
@@ -193,6 +194,27 @@ bool checkPairingValid() {
 }
 
 
+// ===== HTTP Action helper =====
+void fireHttpAction(const String& urlTemplate, int id, const String& name, int confidence) {
+  if (urlTemplate.isEmpty()) return;
+  
+  String url = urlTemplate;
+  url.replace("{id}", String(id));
+  url.replace("{name}", name);
+  url.replace("{confidence}", String(confidence));
+  
+  HTTPClient http;
+  http.setTimeout(3000); // 3s timeout, don't block scanning
+  http.begin(url);
+  int httpCode = http.GET();
+  if (httpCode > 0) {
+    Serial.println("HTTP action: " + url + " -> " + String(httpCode));
+  } else {
+    Serial.println("HTTP action failed: " + url + " -> " + http.errorToString(httpCode));
+  }
+  http.end();
+}
+
 // ===== Core logic =====
 
 void doScan()
@@ -218,6 +240,8 @@ void doScan()
         mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), match.matchName.c_str());
         mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), String(match.matchConfidence).c_str());
         Serial.println("MQTT message sent: Open the door!");
+        // HTTP action
+        fireHttpAction(settingsManager.getAppSettings().httpMatchUrl, match.matchId, match.matchName, match.matchConfidence);
       } else {
         notifyClients("Security issue! Match was not sent by MQTT because of invalid sensor pairing! This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page.");
       }
@@ -232,6 +256,8 @@ void doScan()
         mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), "");
         mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), "-1");
         Serial.println("MQTT message sent: ring the bell!");
+        // HTTP action
+        fireHttpAction(settingsManager.getAppSettings().httpRingUrl, 0, "", 0);
         delay(1000);
         digitalWrite(doorbellOutputPin, LOW); 
       } else {
