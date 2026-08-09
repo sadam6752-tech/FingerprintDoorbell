@@ -24,6 +24,12 @@ struct AppSettings {
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;
     bool   ignoreTouchRing = false;
+    // LED settings: 0=off, 1=red, 2=blue, 3=purple, 4=green, 5=yellow, 6=cyan, 7=white
+    uint8_t ledReadyColor = 2;    // blue
+    uint8_t ledReadyMode = 2;     // 0=off,1=on,2=breath,3=blink
+    uint8_t ledScanColor = 1;     // red
+    uint8_t ledMatchColor = 3;    // purple
+    uint8_t ledNoMatchColor = 1;  // red (ring event, no match)
     String adminUser = "admin";
     String adminPassword = "";  // empty = no auth (first boot)
 };

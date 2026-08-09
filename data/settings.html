@@ -122,6 +122,37 @@ reader.readAsText(f.files[0]);
 </select>
 <small>Set to "On" during rain to prevent false ring events.</small>
 
+<label for="ledReadyColor">Touch Ring Active: LED Color</label>
+<select id="ledReadyColor" name="ledReadyColor" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="0">Off</option><option value="1">Red</option><option value="2">Blue</option><option value="3">Purple</option><option value="4">Green</option><option value="5">Yellow</option><option value="6">Cyan</option><option value="7">White</option>
+</select>
+<script>document.getElementById('ledReadyColor').value='%LED_READY_COLOR%';</script>
+
+<label for="ledReadyMode">Touch Ring Active: LED Sequence</label>
+<select id="ledReadyMode" name="ledReadyMode" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="0">Off</option><option value="1">On</option><option value="2">Breath</option><option value="3">Blink</option>
+</select>
+<script>document.getElementById('ledReadyMode').value='%LED_READY_MODE%';</script>
+
+<label for="ledScanColor">Scan Fingerprint: LED Color</label>
+<select id="ledScanColor" name="ledScanColor" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="0">Off</option><option value="1">Red</option><option value="2">Blue</option><option value="3">Purple</option><option value="4">Green</option><option value="5">Yellow</option><option value="6">Cyan</option><option value="7">White</option>
+</select>
+<script>document.getElementById('ledScanColor').value='%LED_SCAN_COLOR%';</script>
+
+<label for="ledMatchColor">Matching Fingerprint: LED Color</label>
+<select id="ledMatchColor" name="ledMatchColor" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="0">Off</option><option value="1">Red</option><option value="2">Blue</option><option value="3">Purple</option><option value="4">Green</option><option value="5">Yellow</option><option value="6">Cyan</option><option value="7">White</option>
+</select>
+<script>document.getElementById('ledMatchColor').value='%LED_MATCH_COLOR%';</script>
+
+<label for="ledNoMatchColor">No Match (Ring): LED Color</label>
+<select id="ledNoMatchColor" name="ledNoMatchColor" style="width:auto;height:auto;padding:8px 12px;margin-bottom:4px">
+<option value="0">Off</option><option value="1">Red</option><option value="2">Blue</option><option value="3">Purple</option><option value="4">Green</option><option value="5">Yellow</option><option value="6">Cyan</option><option value="7">White</option>
+</select>
+<script>document.getElementById('ledNoMatchColor').value='%LED_NOMATCH_COLOR%';</script>
+<small>Not all R503 versions support all colors. Older ones: Red, Blue, Purple only.</small>
+
 <div class="btns">
 <button name="btnSaveSettings" class="btn btn-green">Save and Restart</button>
 </div>

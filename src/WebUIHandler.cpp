@@ -48,6 +48,16 @@ String processor(const String& var){
     return fingerManager.getIgnoreTouchRing() ? "" : "selected";
   } else if (var == "TOUCHRING_ON_SEL") {
     return fingerManager.getIgnoreTouchRing() ? "selected" : "";
+  } else if (var == "LED_READY_COLOR") {
+    return String(settingsManager.getAppSettings().ledReadyColor);
+  } else if (var == "LED_READY_MODE") {
+    return String(settingsManager.getAppSettings().ledReadyMode);
+  } else if (var == "LED_SCAN_COLOR") {
+    return String(settingsManager.getAppSettings().ledScanColor);
+  } else if (var == "LED_MATCH_COLOR") {
+    return String(settingsManager.getAppSettings().ledMatchColor);
+  } else if (var == "LED_NOMATCH_COLOR") {
+    return String(settingsManager.getAppSettings().ledNoMatchColor);
   } else if (var == "ADMIN_USER") {
     return settingsManager.getAppSettings().adminUser;
   } else if (var == "ADMIN_PASSWORD") {
@@ -189,6 +199,13 @@ void startWebserver(){
         bool newTouchRingState = (touchRingSetting == "on");
         fingerManager.setIgnoreTouchRing(newTouchRingState);
         settings.ignoreTouchRing = newTouchRingState;
+        // LED settings
+        settings.ledReadyColor = request->arg("ledReadyColor").toInt();
+        settings.ledReadyMode = request->arg("ledReadyMode").toInt();
+        settings.ledScanColor = request->arg("ledScanColor").toInt();
+        settings.ledMatchColor = request->arg("ledMatchColor").toInt();
+        settings.ledNoMatchColor = request->arg("ledNoMatchColor").toInt();
+        fingerManager.configureLed(settings.ledReadyColor, settings.ledReadyMode, settings.ledScanColor, settings.ledMatchColor, settings.ledNoMatchColor);
         // Admin credentials
         String newAdminUser = request->arg("admin_user");
         String newAdminPass = request->arg("admin_password");

@@ -42,6 +42,13 @@ class FingerprintManager {
     bool ignoreTouchRing = false; // set to true when the sensor is usually exposed to rain to avoid false ring events. Can also be set conditional by a rain sensor over MQTT
     bool lastIgnoreTouchRing = false;
     
+    // LED configuration
+    uint8_t cfgReadyColor = FINGERPRINT_LED_BLUE;
+    uint8_t cfgReadyMode = FINGERPRINT_LED_BREATHING;
+    uint8_t cfgScanColor = FINGERPRINT_LED_RED;
+    uint8_t cfgMatchColor = FINGERPRINT_LED_PURPLE;
+    uint8_t cfgNoMatchColor = FINGERPRINT_LED_RED;
+    
     void updateTouchState(bool touched);
     bool isRingTouched();
     void loadFingerListFromPrefs();
@@ -65,6 +72,10 @@ class FingerprintManager {
     void setLedRingError();
     void setLedRingWifiConfig();
     void setLedRingReady();
+    void setLedRingScan();
+    void setLedRingMatch();
+    void setLedRingNoMatch();
+    void configureLed(uint8_t readyColor, uint8_t readyMode, uint8_t scanColor, uint8_t matchColor, uint8_t noMatchColor);
     String getPairingCode();
     bool setPairingCode(String pairingCode);
     

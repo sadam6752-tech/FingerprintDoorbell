@@ -249,6 +249,7 @@ void doScan()
       break;
     case ScanResult::noMatchFound:
       notifyClients(String("No Match Found (Code ") + match.returnCode + ")");
+      fingerManager.setLedRingNoMatch();
       if (match.scanResult != lastMatch.scanResult) {
         digitalWrite(doorbellOutputPin, HIGH);
         mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "on");
@@ -360,6 +361,13 @@ void setup()
   if (!safeMode) {
     fingerManager.connect();
     fingerManager.setIgnoreTouchRing(settingsManager.getAppSettings().ignoreTouchRing);
+    fingerManager.configureLed(
+      settingsManager.getAppSettings().ledReadyColor,
+      settingsManager.getAppSettings().ledReadyMode,
+      settingsManager.getAppSettings().ledScanColor,
+      settingsManager.getAppSettings().ledMatchColor,
+      settingsManager.getAppSettings().ledNoMatchColor
+    );
     
     if (!checkPairingValid())
       notifyClients("Security issue! Pairing with sensor is invalid. This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page. MQTT messages regarding matching fingerprints will not been sent until pairing is valid again.");

@@ -30,6 +30,11 @@ bool SettingsManager::loadAppSettings() {
         appSettings.sensorPairingCode = preferences.getString("pairingCode", "");
         appSettings.sensorPairingValid = preferences.getBool("pairingValid", false);
         appSettings.ignoreTouchRing = preferences.getBool("ignoreTouchR", false);
+        appSettings.ledReadyColor = preferences.getUChar("ledReadyCol", 1);
+        appSettings.ledReadyMode = preferences.getUChar("ledReadyMode", 2);
+        appSettings.ledScanColor = preferences.getUChar("ledScanCol", 1);
+        appSettings.ledMatchColor = preferences.getUChar("ledMatchCol", 3);
+        appSettings.ledNoMatchColor = preferences.getUChar("ledNoMtchCol", 1);
         appSettings.adminUser = preferences.getString("adminUser", String("admin"));
         appSettings.adminPassword = preferences.getString("adminPass", String(""));
         preferences.end();
@@ -64,6 +69,11 @@ void SettingsManager::saveAppSettings() {
     preferences.putString("pairingCode", appSettings.sensorPairingCode);
     preferences.putBool("pairingValid", appSettings.sensorPairingValid);
     preferences.putBool("ignoreTouchR", appSettings.ignoreTouchRing);
+    preferences.putUChar("ledReadyCol", appSettings.ledReadyColor);
+    preferences.putUChar("ledReadyMode", appSettings.ledReadyMode);
+    preferences.putUChar("ledScanCol", appSettings.ledScanColor);
+    preferences.putUChar("ledMatchCol", appSettings.ledMatchColor);
+    preferences.putUChar("ledNoMtchCol", appSettings.ledNoMatchColor);
     preferences.putString("adminUser", appSettings.adminUser);
     preferences.putString("adminPass", appSettings.adminPassword);
     preferences.end();

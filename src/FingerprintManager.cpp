@@ -56,7 +56,7 @@ void FingerprintManager::updateTouchState(bool touched)
       // check if sensor or ring is touched
       if (touched) {
         // turn touch indicator on:
-        finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 0);
+        setLedRingScan();
       } else {
         // turn touch indicator off:
         setLedRingReady();
@@ -191,7 +191,7 @@ Match FingerprintManager::scanFingerprint() {
     match.returnCode = finger.fingerSearch();
     if (match.returnCode == FINGERPRINT_OK) {
         // found a match!
-        finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_PURPLE);
+        setLedRingMatch();
         
         match.scanResult = ScanResult::matchFound;
         match.matchId = finger.fingerID;
@@ -463,9 +463,33 @@ void FingerprintManager::setLedRingWifiConfig() {
 
 void FingerprintManager::setLedRingReady() {
   if (!ignoreTouchRing)
-    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 250, FINGERPRINT_LED_BLUE);
+    finger.LEDcontrol(cfgReadyMode, 250, cfgReadyColor);
   else
-    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_BLUE); // just an indicator for me to see if touch ring is active or not
+    finger.LEDcontrol(FINGERPRINT_LED_ON, 0, cfgReadyColor);
+}
+
+void FingerprintManager::setLedRingScan() {
+  finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, cfgScanColor, 0);
+}
+
+void FingerprintManager::setLedRingMatch() {
+  finger.LEDcontrol(FINGERPRINT_LED_ON, 0, cfgMatchColor);
+}
+
+void FingerprintManager::setLedRingNoMatch() {
+  finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, cfgNoMatchColor, 0);
+}
+
+void FingerprintManager::configureLed(uint8_t readyColor, uint8_t readyMode, uint8_t scanColor, uint8_t matchColor, uint8_t noMatchColor) {
+  // Map settings values to R503 color codes: 0=off, 1=red, 2=blue, 3=purple, 4=green, 5=yellow, 6=cyan, 7=white
+  // R503 uses: 1=red, 2=blue, 3=purple, 4+=newer sensors only
+  const uint8_t modeMap[] = { FINGERPRINT_LED_OFF, FINGERPRINT_LED_ON, FINGERPRINT_LED_BREATHING, FINGERPRINT_LED_FLASHING };
+  
+  cfgReadyColor = readyColor; // pass directly (0=off handled by mode, 1-7 = R503 color codes)
+  cfgReadyMode = (readyMode < 4) ? modeMap[readyMode] : FINGERPRINT_LED_BREATHING;
+  cfgScanColor = scanColor;
+  cfgMatchColor = matchColor;
+  cfgNoMatchColor = noMatchColor;
 }
 
 bool FingerprintManager::deleteAll() {
