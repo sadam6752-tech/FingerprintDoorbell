@@ -419,6 +419,24 @@ String FingerprintManager::getFingerListAsHtmlOptionList() {
   return htmlOptions;
 }
 
+String FingerprintManager::getFingerListAsJson() {
+  String json = "[";
+  int counter = 0;
+  for (int i = 1; i <= 200; i++) {
+    if (fingerList[i].compareTo("@empty") != 0) {
+      // Escape quotes and backslashes in the name for valid JSON
+      String name = fingerList[i];
+      name.replace("\\", "\\\\");
+      name.replace("\"", "\\\"");
+      if (counter > 0) json += ",";
+      json += "{\"id\":" + String(i) + ",\"name\":\"" + name + "\"}";
+      counter++;
+    }
+  }
+  json += "]";
+  return json;
+}
+
 void FingerprintManager::setIgnoreTouchRing(bool state) {
   if (ignoreTouchRing != state) {
     ignoreTouchRing = state;

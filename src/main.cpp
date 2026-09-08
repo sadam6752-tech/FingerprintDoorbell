@@ -23,7 +23,7 @@
 #define MAX_CRASH_COUNT 3
 
 // ===== Global variable DEFINITIONS =====
-const char* VersionInfo = "0.9";
+const char* VersionInfo = "0.9.1";
 const int doorbellOutputPin = 19;
 bool safeMode = false; // true = only WiFi+WebUI, no scanning/MQTT
 unsigned long lastHeapCheck = 0;
@@ -215,35 +215,86 @@ void fireHttpAction(const String& urlTemplate, int id, const String& name, int c
   http.end();
 }
 
+// ===== Server Mode event helper (ioBroker adapter) =====
+// Minimal percent-encoding for query values (space, &, =, ?, #, +, %)
+String urlEncodeValue(const String& value) {
+  String out;
+  const char* hex = "0123456789ABCDEF";
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value.charAt(i);
+    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      out += c;
+    } else {
+      out += '%';
+      out += hex[(c >> 4) & 0xF];
+      out += hex[c & 0xF];
+    }
+  }
+  return out;
+}
+
+// Sends an event to the registered server, e.g. path="match", query="id=5&name=Alex&confidence=180"
+void fireServerEvent(const String& path, const String& query) {
+  AppSettings s = settingsManager.getAppSettings();
+  if (s.serverHost.isEmpty()) return;
+
+  String url = "http://" + s.serverHost + ":" + String(s.serverPort) + "/" + path + "?";
+  if (query.length() > 0) {
+    url += query + "&";
+  }
+  url += "token=" + urlEncodeValue(s.serverToken);
+
+  HTTPClient http;
+  http.setTimeout(3000); // 3s timeout, don't block scanning
+  http.begin(url);
+  int httpCode = http.GET();
+  if (httpCode > 0) {
+    Serial.println("Server event: /" + path + " -> " + String(httpCode));
+  } else {
+    Serial.println("Server event failed: /" + path + " -> " + http.errorToString(httpCode));
+  }
+  http.end();
+}
+
 // ===== Core logic =====
 
 void doScan()
 {
   Match match = fingerManager.scanFingerprint();
-  String mqttRootTopic = settingsManager.getAppSettings().mqttRootTopic;
+  AppSettings appCfg = settingsManager.getAppSettings();
+  String mqttRootTopic = appCfg.mqttRootTopic;
+  bool serverMode = appCfg.serverMode;
   switch(match.scanResult)
   {
     case ScanResult::noFinger:
       if (match.scanResult != lastMatch.scanResult) {
         Serial.println("no finger");
-        mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
-        mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), "-1");
-        mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), "");
-        mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), "-1");
+        if (!serverMode) {
+          mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
+          mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), "-1");
+          mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), "");
+          mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), "-1");
+        }
       }
       break; 
     case ScanResult::matchFound:
       notifyClients( String("Match Found: ") + match.matchId + " - " + match.matchName  + " with confidence of " + match.matchConfidence );
       if (checkPairingValid()) {
-        mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
-        mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), String(match.matchId).c_str());
-        mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), match.matchName.c_str());
-        mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), String(match.matchConfidence).c_str());
-        Serial.println("MQTT message sent: Open the door!");
-        // HTTP action
-        fireHttpAction(settingsManager.getAppSettings().httpMatchUrl, match.matchId, match.matchName, match.matchConfidence);
+        if (serverMode) {
+          // Server mode: send event only to the registered server (no MQTT, no legacy URLs)
+          fireServerEvent("match", "id=" + String(match.matchId) + "&name=" + urlEncodeValue(match.matchName) + "&confidence=" + String(match.matchConfidence));
+          Serial.println("Server event sent: match");
+        } else {
+          mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "off");
+          mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), String(match.matchId).c_str());
+          mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), match.matchName.c_str());
+          mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), String(match.matchConfidence).c_str());
+          Serial.println("MQTT message sent: Open the door!");
+          // HTTP action
+          fireHttpAction(appCfg.httpMatchUrl, match.matchId, match.matchName, match.matchConfidence);
+        }
       } else {
-        notifyClients("Security issue! Match was not sent by MQTT because of invalid sensor pairing! This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page.");
+        notifyClients("Security issue! Match was not sent because of invalid sensor pairing! This could potentially be an attack! If the sensor is new or has been replaced by you do a (re)pairing in settings page.");
       }
       delay(3000);
       break;
@@ -252,13 +303,18 @@ void doScan()
       fingerManager.setLedRingNoMatch();
       if (match.scanResult != lastMatch.scanResult) {
         digitalWrite(doorbellOutputPin, HIGH);
-        mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "on");
-        mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), "-1");
-        mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), "");
-        mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), "-1");
-        Serial.println("MQTT message sent: ring the bell!");
-        // HTTP action
-        fireHttpAction(settingsManager.getAppSettings().httpRingUrl, 0, "", 0);
+        if (serverMode) {
+          fireServerEvent("ring", "");
+          Serial.println("Server event sent: ring");
+        } else {
+          mqttClient.publish((String(mqttRootTopic) + "/ring").c_str(), "on");
+          mqttClient.publish((String(mqttRootTopic) + "/matchId").c_str(), "-1");
+          mqttClient.publish((String(mqttRootTopic) + "/matchName").c_str(), "");
+          mqttClient.publish((String(mqttRootTopic) + "/matchConfidence").c_str(), "-1");
+          Serial.println("MQTT message sent: ring the bell!");
+          // HTTP action
+          fireHttpAction(appCfg.httpRingUrl, 0, "", 0);
+        }
         delay(1000);
         digitalWrite(doorbellOutputPin, LOW); 
       } else {

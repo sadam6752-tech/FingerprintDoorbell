@@ -66,6 +66,7 @@ class FingerprintManager {
     void deleteFinger(int id);
     void renameFinger(int id, String newName);
     String getFingerListAsHtmlOptionList();
+    String getFingerListAsJson();
     void setIgnoreTouchRing(bool state);
     bool getIgnoreTouchRing();
     bool isFingerOnSensor();

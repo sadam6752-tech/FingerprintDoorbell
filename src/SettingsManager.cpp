@@ -26,6 +26,10 @@ bool SettingsManager::loadAppSettings() {
         appSettings.gmtOffsetHours = preferences.getInt("gmtOffset", 0);
         appSettings.httpMatchUrl = preferences.getString("httpMatchUrl", String(""));
         appSettings.httpRingUrl = preferences.getString("httpRingUrl", String(""));
+        appSettings.serverMode = preferences.getBool("serverMode", false);
+        appSettings.serverHost = preferences.getString("serverHost", String(""));
+        appSettings.serverPort = preferences.getInt("serverPort", 8095);
+        appSettings.serverToken = preferences.getString("serverToken", String(""));
         appSettings.sensorPin = preferences.getString("sensorPin", "00000000");
         appSettings.sensorPairingCode = preferences.getString("pairingCode", "");
         appSettings.sensorPairingValid = preferences.getBool("pairingValid", false);
@@ -65,6 +69,10 @@ void SettingsManager::saveAppSettings() {
     preferences.putInt("gmtOffset", appSettings.gmtOffsetHours);
     preferences.putString("httpMatchUrl", appSettings.httpMatchUrl);
     preferences.putString("httpRingUrl", appSettings.httpRingUrl);
+    preferences.putBool("serverMode", appSettings.serverMode);
+    preferences.putString("serverHost", appSettings.serverHost);
+    preferences.putInt("serverPort", appSettings.serverPort);
+    preferences.putString("serverToken", appSettings.serverToken);
     preferences.putString("sensorPin", appSettings.sensorPin);
     preferences.putString("pairingCode", appSettings.sensorPairingCode);
     preferences.putBool("pairingValid", appSettings.sensorPairingValid);

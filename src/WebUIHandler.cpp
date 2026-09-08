@@ -409,6 +409,71 @@ void startWebserver(){
       request->redirect("/");
     });
 
+    // ===== Server Mode: register the ioBroker adapter as event target (auth required) =====
+    webServer.on("/api/register-server", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if (request->hasArg("host") && request->hasArg("port")) {
+        AppSettings settings = settingsManager.getAppSettings();
+        settings.serverHost = request->arg("host");
+        settings.serverPort = request->arg("port").toInt();
+        if (settings.serverPort <= 0 || settings.serverPort > 65535) settings.serverPort = 8095;
+        if (request->hasArg("token")) settings.serverToken = request->arg("token");
+        settings.serverMode = true; // enabling server mode disables MQTT/legacy URLs on next scan
+        settingsManager.saveAppSettings(settings);
+        notifyClients(String("Server registered: ") + settings.serverHost + ":" + settings.serverPort);
+        String json = "{\"ok\":true,\"serverHost\":\"" + settings.serverHost + "\",\"serverPort\":" + String(settings.serverPort) + ",\"serverMode\":true}";
+        request->send(200, "application/json", json);
+      } else {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"host and port required\"}");
+      }
+    });
+
+    // ===== Server Mode: toggle server mode on/off (auth required) =====
+    webServer.on("/api/server-mode", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if (request->hasArg("state")) {
+        AppSettings settings = settingsManager.getAppSettings();
+        settings.serverMode = (request->arg("state") == "on");
+        settingsManager.saveAppSettings(settings);
+        notifyClients(String("Server mode is now '") + (settings.serverMode ? "on" : "off") + "'");
+      }
+      AppSettings s = settingsManager.getAppSettings();
+      request->send(200, "application/json", String("{\"serverMode\":") + (s.serverMode ? "true" : "false") + "}");
+    });
+
+    // ===== Status endpoint (JSON, no auth) — consumed by the adapter =====
+    webServer.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
+      AppSettings s = settingsManager.getAppSettings();
+      String json = "{";
+      json += "\"version\":\"" + String(VersionInfo) + "\",";
+      json += "\"uptime\":" + String(millis() / 1000) + ",";
+      json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
+      json += "\"ignoreTouchRing\":" + String(fingerManager.getIgnoreTouchRing() ? "true" : "false") + ",";
+      json += "\"serverMode\":" + String(s.serverMode ? "true" : "false");
+      json += "}";
+      request->send(200, "application/json", json);
+    });
+
+    // ===== Toggle ignore touch ring via HTTP (auth required, no reboot) =====
+    webServer.on("/set-touch-ring", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if (request->hasArg("state")) {
+        String state = request->arg("state");
+        bool newState = (state == "on");
+        fingerManager.setIgnoreTouchRing(newState);
+        AppSettings s = settingsManager.getAppSettings();
+        s.ignoreTouchRing = newState;
+        settingsManager.saveAppSettings(s);
+      }
+      request->send(200, "application/json", String("{\"ignoreTouchRing\":") + (fingerManager.getIgnoreTouchRing() ? "true" : "false") + "}");
+    });
+
+    // ===== Fingerprint list as JSON (auth required) =====
+    webServer.on("/api/fingerprints", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      request->send(200, "application/json", fingerManager.getFingerListAsJson());
+    });
+
     // ===== Debug endpoint (no auth) — for diagnosing save issues =====
     webServer.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
       AppSettings s = settingsManager.getAppSettings();

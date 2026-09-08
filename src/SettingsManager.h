@@ -20,6 +20,12 @@ struct AppSettings {
     int    gmtOffsetHours = 0;
     String httpMatchUrl = "";   // called on fingerprint match, supports {id}, {name}, {confidence}
     String httpRingUrl = "";    // called on ring event (unknown finger)
+    // Server mode (ioBroker adapter integration): when true, events go ONLY to the
+    // registered server; MQTT and httpMatchUrl/httpRingUrl are skipped.
+    bool   serverMode = false;
+    String serverHost = "";
+    int    serverPort = 8095;
+    String serverToken = "";
     String sensorPin = "00000000";
     String sensorPairingCode = "";
     bool   sensorPairingValid = false;
