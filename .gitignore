@@ -5,3 +5,8 @@
 .vscode/ipch
 doc/wiring.pptx
 builds
+
+# Release packaging artifacts (uploaded to GitHub Releases, not tracked in git)
+release/*.zip
+release/FLASH_INSTRUCTIONS.txt
+release/firmware-v*.bin
