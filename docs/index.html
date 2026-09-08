@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FingerprintDoorbell Flasher</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 18px 64px;
+            line-height: 1.55;
+            color: #1c1e21;
+            background: #fafafa;
+        }
+        h1 { font-size: 1.7rem; margin-bottom: 0.2em; }
+        .sub { color: #666; margin-top: 0; }
+        .card {
+            background: #fff;
+            border: 1px solid #e3e3e3;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin: 18px 0;
+        }
+        .flash-btn { text-align: center; margin: 28px 0; }
+        code {
+            background: #eef0f3;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.92em;
+        }
+        .warn {
+            background: #fff6e5;
+            border: 1px solid #ffd591;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.95em;
+        }
+        ol { padding-left: 1.3em; }
+        a { color: #1a73e8; }
+        footer { margin-top: 40px; font-size: 0.85em; color: #888; }
+        @media (prefers-color-scheme: dark) {
+            body { background: #17191c; color: #e4e6eb; }
+            .card { background: #1f2226; border-color: #33373d; }
+            code { background: #2a2e33; }
+            .sub, footer { color: #9aa0a6; }
+            .warn { background: #3a2f18; border-color: #6b5220; color: #f0d9a8; }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔒 FingerprintDoorbell Flasher</h1>
+    <p class="sub">Install FingerprintDoorbell on your ESP32 right from the browser — no tools, no PlatformIO.</p>
+
+    <div class="card">
+        <p>This flasher installs the firmware over USB using
+            <a href="https://esphome.github.io/esp-web-tools/" target="_blank" rel="noopener">ESP Web Tools</a>
+            (Web Serial). Connect your ESP32 with a USB cable, click the button below, pick the serial port and
+            follow the steps. A full erase + install is performed, so the device starts fresh.</p>
+
+        <div class="flash-btn">
+            <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+        </div>
+
+        <p class="warn"><strong>Browser support:</strong> works only in <strong>Chrome, Edge or Opera</strong>
+            (desktop). Firefox and Safari do not support Web Serial.</p>
+    </div>
+
+    <div class="card">
+        <h2>After flashing</h2>
+        <ol>
+            <li>The ESP opens a WiFi access point <code>FingerprintDoorbell</code> — connect and enter your WiFi.</li>
+            <li>Open the device web UI at its IP address and set an admin password.</li>
+            <li>Install the <a href="https://github.com/sadam6752-tech/ioBroker.fingerprint" target="_blank"
+                    rel="noopener">ioBroker.fingerprint</a> adapter. With this firmware (v0.9.1+) it configures
+                the device automatically (server mode).</li>
+        </ol>
+    </div>
+
+    <div class="card">
+        <h2>Updating later</h2>
+        <p>Future updates can be installed over the air (no USB needed):
+            open <code>http://&lt;device-ip&gt;/update</code>, choose the new <code>firmware.bin</code>
+            from the <a href="https://github.com/sadam6752-tech/FingerprintDoorbell/releases" target="_blank"
+                rel="noopener">Releases</a> page and upload it.</p>
+    </div>
+
+    <footer>
+        Firmware v0.9.1 ·
+        <a href="https://github.com/sadam6752-tech/FingerprintDoorbell" target="_blank" rel="noopener">Source</a> ·
+        Fork of <a href="https://github.com/frickelzeugs/FingerprintDoorbell" target="_blank"
+            rel="noopener">frickelzeugs/FingerprintDoorbell</a>
+    </footer>
+
+    <script type="module"
+        src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body>
+
+</html>
