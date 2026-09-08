@@ -4,7 +4,7 @@
 > [ioBroker.fingerprint](https://github.com/sadam6752-tech/ioBroker.fingerprint) adapter
 > (no MQTT / simple-api needed) and a browser-based installer.
 >
-> - 🔌 **Flash from your browser (fresh ESP32):** https://sadam6752-tech.github.io/FingerprintDoorbell/ (Chrome/Edge/Opera)
+> - 🔌 **Flash from your browser (fresh ESP32):** https://sadam6752-tech.github.io/FingerprintDoorbell/ (Chrome/Edge/Opera or Firefox 151+)
 > - ⬆️ **Update via OTA:** `http://<device-ip>/update` → upload `firmware.bin` from [Releases](https://github.com/sadam6752-tech/FingerprintDoorbell/releases)
 > - 🏠 **ioBroker adapter:** [iobroker.fingerprint](https://github.com/sadam6752-tech/ioBroker.fingerprint) (on npm)
 
