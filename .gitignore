@@ -10,3 +10,4 @@ builds
 release/*.zip
 release/FLASH_INSTRUCTIONS.txt
 release/firmware-v*.bin
+release/firmware-nvs-reset.bin
