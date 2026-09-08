@@ -1,5 +1,13 @@
 # FingerprintDoorbell
 
+> **This fork (v0.9.1)** adds a *server mode* for direct integration with the
+> [ioBroker.fingerprint](https://github.com/sadam6752-tech/ioBroker.fingerprint) adapter
+> (no MQTT / simple-api needed) and a browser-based installer.
+>
+> - 🔌 **Flash from your browser (fresh ESP32):** https://sadam6752-tech.github.io/FingerprintDoorbell/ (Chrome/Edge/Opera)
+> - ⬆️ **Update via OTA:** `http://<device-ip>/update` → upload `firmware.bin` from [Releases](https://github.com/sadam6752-tech/FingerprintDoorbell/releases)
+> - 🏠 **ioBroker adapter:** [iobroker.fingerprint](https://github.com/sadam6752-tech/ioBroker.fingerprint) (on npm)
+
 ## What is FingerprintDoorbell?
 It's more or less a doorbell with the ability to scan finger prints or a fingerprint reader with the ability to act as doorbell, depending on your perspective ;-). But lets speak some images:
 
