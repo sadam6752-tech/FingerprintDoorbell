@@ -23,7 +23,7 @@
 #define MAX_CRASH_COUNT 3
 
 // ===== Global variable DEFINITIONS =====
-const char* VersionInfo = "0.9.2";
+const char* VersionInfo = "0.9.3";
 const int doorbellOutputPin = 19;
 bool safeMode = false; // true = only WiFi+WebUI, no scanning/MQTT
 unsigned long lastHeapCheck = 0;

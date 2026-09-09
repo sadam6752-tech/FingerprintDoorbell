@@ -610,8 +610,11 @@ String FingerprintManager::getFingerName(int id) {
   return "@empty";
 }
 
-// R503 fingerprint template size: 512 bytes (2 x 256-byte characteristic blocks)
-#define FP_TEMPLATE_SIZE 512
+// R503 fingerprint template size: 1536 bytes. The sensor uploads the full
+// template as 12 packets of 128 bytes (the last one is an END packet); it is
+// NOT 512 bytes. Reading fewer bytes truncates the template and Store then
+// rejects it with FLASHERR (0x18).
+#define FP_TEMPLATE_SIZE 1536
 // The R503 sends/expects the template payload in packets matching its packet
 // length register. We keep the sensor's default (128) and read/write the raw
 // byte stream ourselves, de-framing packet headers manually (proven approach
@@ -627,7 +630,7 @@ String FingerprintManager::getFingerName(int id) {
 int FingerprintManager::readTemplateFromSensor(uint8_t *buffer, int maxLen) {
   // Read the raw stream. For 512 bytes of template the sensor sends packet
   // headers + checksums too, so allow generous room and a longer timeout.
-  const int rawCap = 1200;
+  const int rawCap = 2048;
   uint8_t raw[rawCap];
   int rawLen = 0;
   unsigned long startMillis = millis();
@@ -766,7 +769,7 @@ String FingerprintManager::exportFingerprintsToJson() {
       continue;
     }
 
-    // Read the template packet-by-packet
+    // Read the full template packet-by-packet (1536 bytes = 12 x 128)
     uint8_t templateBuffer[FP_TEMPLATE_SIZE];
     memset(templateBuffer, 0xFF, sizeof(templateBuffer));
     int bytesRead = readTemplateFromSensor(templateBuffer, FP_TEMPLATE_SIZE);
@@ -802,46 +805,49 @@ bool FingerprintManager::importFingerprintFromTemplate(int id, const String& nam
   finger.getParameters();
 
   // Restore path: DownChar the template into char buffer 1, then Store it into
-  // the flash library at the given page id. This matches the R503 datasheet and
-  // the pyfingerprint reference (uploadCharacteristics + storeTemplate).
-  bool ok = true;
-  {
-    uint8_t packet[] = {0x09, 0x01}; // DownChar, CharBuffer 1
+  // the flash library at the given page id (R503 datasheet DownChar 09H + Store
+  // 06H; cf. pyfingerprint uploadCharacteristics + storeTemplate). A single
+  // retry guards against a transient FLASHERR from the flash controller.
+  bool stored = false;
+  uint8_t result = 0xFF;
+  for (int attempt = 0; attempt < 2 && !stored; attempt++) {
+    // --- DownChar into CharBuffer 1 + send template data ---
+    uint8_t packet[] = {0x09, 0x01};
     Adafruit_Fingerprint_Packet p(FINGERPRINT_COMMANDPACKET, sizeof(packet), packet);
     finger.writeStructuredPacket(p);
     uint8_t ackRc = finger.getStructuredPacket(&p);
-    if (ackRc != FINGERPRINT_OK) {
-      Serial.println(String("Import #") + id + ": DownChar no ACK, rc=" + ackRc);
-      ok = false;
-    } else if (p.data[0] != FINGERPRINT_OK) {
-      Serial.println(String("Import #") + id + ": DownChar rejected, data[0]=" + p.data[0]);
-      ok = false;
-    } else {
-      writeTemplateToSensor(templateData, templateSize);
-      // Let the sensor finish assembling the buffer, then drain any trailing bytes.
-      delay(300);
-      unsigned long t0 = millis();
-      while ((millis() - t0) < 200) {
-        if (mySerial.available()) { mySerial.read(); }
-        else { delay(1); }
-      }
+    if (ackRc != FINGERPRINT_OK || p.data[0] != FINGERPRINT_OK) {
+      Serial.println(String("Import #") + id + ": DownChar failed (ackRc=" + ackRc + " data[0]=" + p.data[0] + ")");
+      delay(200);
+      continue;
     }
+    writeTemplateToSensor(templateData, templateSize);
+    delay(300);
+    unsigned long t0 = millis();
+    while ((millis() - t0) < 200) {
+      if (mySerial.available()) { mySerial.read(); }
+      else { delay(1); }
+    }
+
+    // --- Store CharBuffer 1 -> flash page id ---
+    result = finger.storeModel(id);
+    if (result == FINGERPRINT_OK) {
+      stored = true;
+      break;
+    }
+    Serial.println(String("Import #") + id + ": store attempt " + (attempt + 1) + " rc=" + result + ", retrying");
+    delay(300);
   }
 
-  bool stored = false;
-  if (ok) {
-    uint8_t result = finger.storeModel(id); // Store CharBuffer 1 -> flash page id
-    if (result == FINGERPRINT_OK) {
-      fingerList[id] = name;
-      Preferences preferences;
-      preferences.begin("fingerList", false);
-      preferences.putString(String(id).c_str(), name);
-      preferences.end();
-      Serial.println(String("Imported finger #") + id + " (" + name + ")");
-      stored = true;
-    } else {
-      Serial.println(String("Failed to store imported finger #") + id + ", storeModel rc=" + result);
-    }
+  if (stored) {
+    fingerList[id] = name;
+    Preferences preferences;
+    preferences.begin("fingerList", false);
+    preferences.putString(String(id).c_str(), name);
+    preferences.end();
+    Serial.println(String("Imported finger #") + id + " (" + name + ")");
+  } else {
+    Serial.println(String("Failed to store imported finger #") + id + ", storeModel rc=" + result);
   }
 
   return stored;
