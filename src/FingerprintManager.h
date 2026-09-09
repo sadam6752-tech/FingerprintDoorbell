@@ -55,6 +55,9 @@ class FingerprintManager {
     void disconnect();
     uint8_t writeNotepad(uint8_t pageNumber, const char *text, uint8_t length);
     uint8_t readNotepad(uint8_t pageNumber, char *text, uint8_t length);
+    // Template transfer (backup/restore) — packet-based to avoid serial desync
+    int readTemplateFromSensor(uint8_t *buffer, int maxLen);
+    bool writeTemplateToSensor(const uint8_t *templateData, int templateSize);
     
 
 
