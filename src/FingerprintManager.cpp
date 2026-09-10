@@ -255,6 +255,7 @@ NewFinger FingerprintManager::enrollFinger(int id, String name) {
   // Repeat n times to get better resulting templates (as stated in R503 documentation up to 6 combined image samples possible, but I got an communication error when trying more than 5 samples, so dont go >5)
   for (int nTimes=1; nTimes<=5; nTimes++)
   {
+      enrollStep = nTimes; // progress for the adapter (polled via /api/status)
       notifyClients(String("Take #" + String(nTimes))+ " (place your finger on the sensor until led ring stops flashing, then remove it).");
 
       if (nTimes != 1) // not on first run
@@ -496,6 +497,14 @@ void FingerprintManager::setLedRingMatch() {
 
 void FingerprintManager::setLedRingNoMatch() {
   finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, cfgNoMatchColor, 0);
+}
+
+void FingerprintManager::setLedRingCustom(uint8_t mode, uint8_t speed, uint8_t color, uint8_t cycles) {
+  // mode: 0=off, 1=on, 2=breathing, 3=flashing
+  const uint8_t modeMap[] = { FINGERPRINT_LED_OFF, FINGERPRINT_LED_ON, FINGERPRINT_LED_BREATHING, FINGERPRINT_LED_FLASHING };
+  uint8_t m = (mode < 4) ? modeMap[mode] : FINGERPRINT_LED_ON;
+  if (color < 1 || color > 7) color = FINGERPRINT_LED_BLUE;
+  finger.LEDcontrol(m, speed, color, cycles);
 }
 
 void FingerprintManager::configureLed(uint8_t readyColor, uint8_t readyMode, uint8_t scanColor, uint8_t matchColor, uint8_t noMatchColor) {

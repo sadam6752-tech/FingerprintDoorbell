@@ -79,6 +79,9 @@ class FingerprintManager {
     void setLedRingScan();
     void setLedRingMatch();
     void setLedRingNoMatch();
+    // Direct LED ring control from the adapter (mode 0=off/1=on/2=breathing/3=flashing,
+    // color 1..7, speed 0..255, cycles 0..255)
+    void setLedRingCustom(uint8_t mode, uint8_t speed, uint8_t color, uint8_t cycles);
     void configureLed(uint8_t readyColor, uint8_t readyMode, uint8_t scanColor, uint8_t matchColor, uint8_t noMatchColor);
     String getPairingCode();
     bool setPairingCode(String pairingCode);

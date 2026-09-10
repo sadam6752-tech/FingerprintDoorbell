@@ -27,6 +27,14 @@ extern bool needMaintenanceMode;
 extern String enrollId;
 extern String enrollName;
 
+// Enroll progress (polled by the ioBroker adapter via /api/status)
+//   enrollState: 0=idle, 1=scanning, 2=success, 3=error
+//   enrollStep:  current scan step 0..5
+//   enrollMessage: last human-readable status line
+extern int enrollState;
+extern int enrollStep;
+extern String enrollMessage;
+
 extern const char* VersionInfo;
 extern const int doorbellOutputPin;
 

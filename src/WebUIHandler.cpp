@@ -449,9 +449,60 @@ void startWebserver(){
       json += "\"uptime\":" + String(millis() / 1000) + ",";
       json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
       json += "\"ignoreTouchRing\":" + String(fingerManager.getIgnoreTouchRing() ? "true" : "false") + ",";
-      json += "\"serverMode\":" + String(s.serverMode ? "true" : "false");
+      json += "\"serverMode\":" + String(s.serverMode ? "true" : "false") + ",";
+      json += "\"wifiRssi\":" + String(WiFi.RSSI()) + ",";
+      json += "\"enrollState\":" + String(enrollState) + ",";
+      json += "\"enrollStep\":" + String(enrollStep) + ",";
+      // enrollMessage may contain quotes/backslashes → escape minimally
+      String em = enrollMessage;
+      em.replace("\\", "\\\\");
+      em.replace("\"", "\\\"");
+      json += "\"enrollMessage\":\"" + em + "\"";
       json += "}";
       request->send(200, "application/json", json);
+    });
+
+    // ===== Start enrollment from the adapter (auth required, async) =====
+    // POST /api/enroll?id=<1..200>&name=<name>  → puts the device into enroll
+    // mode and returns immediately. Progress is reported via /api/status
+    // (enrollState/enrollStep/enrollMessage). The actual 5-scan enrollment
+    // runs in the main loop (doEnroll) and needs the user to place the finger.
+    webServer.on("/api/enroll", HTTP_POST, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      if (currentMode == Mode::enroll || enrollState == 1) {
+        request->send(409, "application/json", "{\"ok\":false,\"error\":\"enrollment already running\"}");
+        return;
+      }
+      if (!request->hasArg("id")) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"missing id\"}");
+        return;
+      }
+      int id = request->arg("id").toInt();
+      if (id < 1 || id > 200) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"id out of range (1..200)\"}");
+        return;
+      }
+      enrollId = String(id);
+      enrollName = request->hasArg("name") ? request->arg("name") : (String("Finger ") + id);
+      enrollState = 1;   // scanning (loop will run doEnroll)
+      enrollStep = 0;
+      enrollMessage = "Enrollment requested";
+      currentMode = Mode::enroll;
+      request->send(200, "application/json", String("{\"ok\":true,\"id\":") + id + "}");
+    });
+
+    // ===== LED ring control from the adapter (auth required) =====
+    // GET /api/led?mode=<0..3>&color=<1..7>&speed=<0..255>&cycles=<0..255>
+    //   mode:  0=off, 1=on, 2=breathing, 3=flashing
+    //   color: 1=red, 2=blue, 3=purple, 4=green, 5=yellow, 6=cyan, 7=white
+    webServer.on("/api/led", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (!authenticateRequest(request)) return;
+      uint8_t mode = request->hasArg("mode") ? (uint8_t)request->arg("mode").toInt() : 1;
+      uint8_t color = request->hasArg("color") ? (uint8_t)request->arg("color").toInt() : 2;
+      uint8_t speed = request->hasArg("speed") ? (uint8_t)request->arg("speed").toInt() : 0;
+      uint8_t cycles = request->hasArg("cycles") ? (uint8_t)request->arg("cycles").toInt() : 0;
+      fingerManager.setLedRingCustom(mode, speed, color, cycles);
+      request->send(200, "application/json", "{\"ok\":true}");
     });
 
     // ===== Toggle ignore touch ring via HTTP (auth required, no reboot) =====

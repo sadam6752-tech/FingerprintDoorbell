@@ -23,7 +23,7 @@
 #define MAX_CRASH_COUNT 3
 
 // ===== Global variable DEFINITIONS =====
-const char* VersionInfo = "0.9.3";
+const char* VersionInfo = "0.9.4";
 const int doorbellOutputPin = 19;
 bool safeMode = false; // true = only WiFi+WebUI, no scanning/MQTT
 unsigned long lastHeapCheck = 0;
@@ -47,6 +47,11 @@ unsigned long mqttReconnectInterval = 5000;
 String enrollId;
 String enrollName;
 Mode currentMode = Mode::scan;
+
+// Enroll progress state (see global.h)
+int enrollState = 0;   // 0=idle, 1=scanning, 2=success, 3=error
+int enrollStep = 0;    // current scan step 0..5
+String enrollMessage = "";
 
 FingerprintManager fingerManager;
 SettingsManager settingsManager;
@@ -333,14 +338,25 @@ void doEnroll()
   int id = enrollId.toInt();
   if (id < 1 || id > 200) {
     notifyClients("Invalid memory slot id '" + enrollId + "'");
+    enrollState = 3; // error
+    enrollMessage = "Invalid slot id";
     return;
   }
 
+  enrollState = 1; // scanning
+  enrollStep = 0;
+  enrollMessage = "Enrollment started";
+
   NewFinger finger = fingerManager.enrollFinger(id, enrollName);
   if (finger.enrollResult == EnrollResult::ok) {
+    enrollState = 2; // success
+    enrollStep = 5;
+    enrollMessage = "Enrollment successful";
     notifyClients("Enrollment successfull. You can now use your new finger for scanning.");
     updateClientsFingerlist(fingerManager.getFingerListAsHtmlOptionList());
   } else if (finger.enrollResult == EnrollResult::error) {
+    enrollState = 3; // error
+    enrollMessage = String("Enrollment failed (code ") + finger.returnCode + ")";
     notifyClients(String("Enrollment failed. (Code ") + finger.returnCode + ")");
   }
 }
